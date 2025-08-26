@@ -5,6 +5,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import API_ID, API_HASH, BOT_TOKEN, OWNER_IDS, MONGO_URI, LOG_CHANNEL, WEB_PORT, WEB_URL
 from aiohttp import web
+from pyrogram.errors import FloodWait
 
 # ----------------- MongoDB Setup -----------------
 mongo_client = AsyncIOMotorClient(MONGO_URI)
@@ -51,10 +52,13 @@ async def handle_file(client, message):
     )
 
     # Log in channel
-    await app.send_message(
-        LOG_CHANNEL,
-        f"📂 New File Uploaded:\n\n👤 User: {message.from_user.first_name} [{message.from_user.id}]\n📝 Name: {file_name}\n📦 Size: {file_size} bytes\n🔗 Link: {download_link}"
-    )
+    try:
+        await app.send_message(
+            LOG_CHANNEL,
+            f"📂 New File Uploaded:\n\n👤 User: {message.from_user.first_name} [{message.from_user.id}]\n📝 Name: {file_name}\n📦 Size: {file_size} bytes\n🔗 Link: {download_link}"
+        )
+    except FloodWait as e:
+        await asyncio.sleep(e.x)
 
 # ----------------- Web Server -----------------
 routes = web.RouteTableDef()
@@ -66,7 +70,16 @@ async def download_file(request):
     if not file_doc:
         return web.Response(text="File not found!", status=404)
 
-    return web.Response(text=f"{WEB_URL}/file/{file_id}")
+    try:
+        # Get the Telegram file path
+        file = await app.get_messages(chat_id=file_doc["uploader_id"], message_ids=file_id)
+        file_path = await app.download_media(file, file_name=file_doc["file_name"])
+    except Exception:
+        return web.Response(text="Error fetching file!", status=500)
+
+    return web.FileResponse(file_path, headers={
+        "Content-Disposition": f"attachment; filename={file_doc['file_name']}"
+    })
 
 # ----------------- Start Web Server -----------------
 async def start_web():
