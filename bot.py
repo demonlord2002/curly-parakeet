@@ -6,7 +6,15 @@ from telegram.ext import Application, MessageHandler, CommandHandler, filters, C
 from mega import Mega
 import config
 
-logging.basicConfig(level=logging.INFO)
+# Ensure /tmp path exists (Heroku only allows /tmp for writing)
+if not os.path.exists(config.TMP_DOWNLOAD_PATH):
+    os.makedirs(config.TMP_DOWNLOAD_PATH, exist_ok=True)
+
+# Logging (Heroku logs go to stdout/stderr)
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 # Initialize MEGA sessions
@@ -24,14 +32,11 @@ def get_next_mega_session():
 
 def rotate_mega_account():
     global current_account_idx
-    current_account_idx += 1
-    if current_account_idx >= len(mega_sessions):
-        current_account_idx = 0
+    current_account_idx = (current_account_idx + 1) % len(mega_sessions)
     return mega_sessions[current_account_idx]
 
 # ------------------- START COMMAND -------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
     text = (
         "🤖 Welcome to **File to MEGA Link Bot!**\n\n"
         "Forward or upload any file, and I will generate a permanent MEGA link for you.\n\n"
@@ -68,8 +73,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await file.download_to_drive(local_path)
 
     max_retries = len(config.MEGA_ACCOUNTS)
-    uploaded = None
-    link = None
+    uploaded, link = None, None
 
     for attempt in range(max_retries):
         session = get_next_mega_session()
@@ -108,7 +112,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.ALL, handle_file))
 
-    print("🤖 Bot started...")
+    logger.info("🤖 Bot started on Heroku...")
     app.run_polling()
 
 if __name__ == "__main__":
