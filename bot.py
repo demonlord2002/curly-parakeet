@@ -1,11 +1,21 @@
 import os
 import asyncio
+import datetime
+import time
 from pyrogram import Client, filters, idle
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import API_ID, API_HASH, BOT_TOKEN, OWNER_IDS, MONGO_URI, LOG_CHANNEL, WEB_PORT, WEB_URL
 from aiohttp import web
 from pyrogram.errors import FloodWait
+
+# ----------------- Ensure UTC Time -----------------
+os.environ["TZ"] = "UTC"
+try:
+    time.tzset()
+except Exception:
+    pass
+print("⏱ Current UTC time:", datetime.datetime.utcnow())
 
 # ----------------- MongoDB Setup -----------------
 mongo_client = AsyncIOMotorClient(MONGO_URI)
@@ -22,12 +32,13 @@ app = Client(
 )
 
 # ----------------- Helper Functions -----------------
-async def save_file_info(file_id, file_name, file_size, uploader_id):
+async def save_file_info(file_id, file_name, file_size, uploader_id, message_id):
     await files_collection.insert_one({
         "file_id": file_id,
         "file_name": file_name,
         "file_size": file_size,
-        "uploader_id": uploader_id
+        "uploader_id": uploader_id,
+        "message_id": message_id
     })
 
 def generate_download_link(file_id):
@@ -45,8 +56,8 @@ async def handle_file(client, message):
     file_name = file.file_name
     file_size = file.file_size
 
-    # Save file info in MongoDB
-    await save_file_info(file_id, file_name, file_size, message.from_user.id)
+    # Save file info in MongoDB (store message_id too for retrieval)
+    await save_file_info(file_id, file_name, file_size, message.from_user.id, message.id)
 
     # Send download link
     download_link = generate_download_link(file_id)
@@ -59,7 +70,8 @@ async def handle_file(client, message):
     try:
         await app.send_message(
             LOG_CHANNEL,
-            f"📂 New File Uploaded:\n\n👤 User: {message.from_user.first_name} [{message.from_user.id}]\n📝 Name: {file_name}\n📦 Size: {file_size} bytes\n🔗 Link: {download_link}"
+            f"📂 New File Uploaded:\n\n👤 User: {message.from_user.first_name} [{message.from_user.id}]\n"
+            f"📝 Name: {file_name}\n📦 Size: {file_size} bytes\n🔗 Link: {download_link}"
         )
     except FloodWait as e:
         await asyncio.sleep(e.x)
@@ -75,9 +87,11 @@ async def download_file(request):
         return web.Response(text="File not found!", status=404)
 
     try:
-        msg = await app.get_messages(chat_id=file_doc["uploader_id"], message_ids=file_id)
+        # Get the original message where file was uploaded
+        msg = await app.get_messages(chat_id=file_doc["uploader_id"], message_ids=file_doc["message_id"])
         file_path = await app.download_media(msg, file_name=file_doc["file_name"])
-    except Exception:
+    except Exception as e:
+        print("❌ Error fetching file:", e)
         return web.Response(text="Error fetching file!", status=500)
 
     return web.FileResponse(
@@ -99,14 +113,23 @@ async def main():
     # Start web server in background
     asyncio.create_task(start_web())
 
-    # Start Pyrogram bot
-    await app.start()
+    # Retry logic for Pyrogram startup
+    started = False
+    for attempt in range(3):
+        try:
+            await app.start()
+            started = True
+            break
+        except Exception as e:
+            print(f"⚠️ Start failed (attempt {attempt+1}): {e}")
+            await asyncio.sleep(5)
+
+    if not started:
+        print("❌ Could not start bot after retries. Exiting...")
+        return
+
     print("🤖 Bot is running...")
-
-    # Keep the bot running
     await idle()
-
-    # Stop bot gracefully
     await app.stop()
 
 if __name__ == "__main__":
