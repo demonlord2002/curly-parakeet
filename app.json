@@ -1,7 +1,7 @@
 {
   "name": "telegram-mega-file-bot",
   "description": "Telegram bot to convert forwarded files into permanent MEGA links with multi-account support",
-  "repository": "https://github.com/YourRepoHere",
+  "repository": "https://github.com/demonlord2002/curly-parakeet",
   "stack": "heroku-20",
   "env": {
     "API_ID": {
