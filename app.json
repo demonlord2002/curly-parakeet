@@ -2,7 +2,7 @@
   "name": "file-to-link-bot",
   "description": "Telegram File-to-Link Bot with MongoDB and direct download links",
   "repository": "https://github.com/demonlord2002/curly-parakeet",
-  "stack": "heroku-20",
+  "stack": "heroku-22",
   "env": {
     "API_ID": {
       "description": "Your Telegram API ID",
