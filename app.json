@@ -1,3 +1,4 @@
+
 {
   "name": "file-to-link-bot",
   "description": "Telegram File-to-Link Bot with MongoDB and direct download links",
@@ -38,10 +39,5 @@
       "quantity": 1,
       "size": "free"
     }
-  },
-  "addons": [
-    {
-      "plan": "mongolab:sandbox"
-    }
-  ]
+  }
 }
