@@ -7,7 +7,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import API_ID, API_HASH, BOT_TOKEN, OWNER_IDS, MONGO_URI, LOG_CHANNEL, WEB_PORT, WEB_URL
 from aiohttp import web
-from pyrogram.errors import FloodWait
+from pyrogram.errors import FloodWait, BadMsgNotification
 
 # ----------------- Ensure UTC Time -----------------
 os.environ["TZ"] = "UTC"
@@ -109,29 +109,31 @@ async def start_web():
     print(f"🌐 Web server running on port {WEB_PORT}")
 
 # ----------------- Main -----------------
-async def main():
-    # Start web server in background
+async def run_bot():
     asyncio.create_task(start_web())
 
-    # Retry logic for Pyrogram startup
-    started = False
-    for attempt in range(3):
+    retries = 0
+    while retries < 10:  # try 10 times before giving up
         try:
             await app.start()
-            started = True
+            print("🤖 Bot connected successfully!")
+            await idle()
             break
+        except BadMsgNotification as e:
+            if e.value == 16:
+                retries += 1
+                print(f"⚠️ Time sync issue (attempt {retries}), retrying in 10s...")
+                await asyncio.sleep(10)
+            else:
+                raise
         except Exception as e:
-            print(f"⚠️ Start failed (attempt {attempt+1}): {e}")
+            retries += 1
+            print(f"⚠️ Start failed (attempt {retries}): {e}")
             await asyncio.sleep(5)
 
-    if not started:
-        print("❌ Could not start bot after retries. Exiting...")
-        return
-
-    print("🤖 Bot is running...")
-    await idle()
     await app.stop()
+    print("❌ Bot stopped.")
 
 if __name__ == "__main__":
     os.makedirs("./sessions", exist_ok=True)
-    asyncio.run(main())
+    asyncio.run(run_bot())
