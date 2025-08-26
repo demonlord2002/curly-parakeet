@@ -1,8 +1,11 @@
 {
   "name": "telegram-mega-file-bot",
   "description": "Telegram bot to convert forwarded files into permanent MEGA links with multi-account support",
-  "repository": "https://github.com/demonlord2002/curly-parakeet",
-  "stack": "heroku-20",
+  "repository": "https://github.com/YourRepoHere",
+  "keywords": ["telegram", "bot", "mega", "file", "uploader"],
+  "buildpacks": [
+    { "url": "heroku/python" }
+  ],
   "env": {
     "API_ID": {
       "description": "Your Telegram API ID from https://my.telegram.org",
@@ -25,19 +28,24 @@
       "required": true
     },
     "MEGA_EMAILS": {
-      "description": "Comma-separated MEGA emails (up to 10)",
+      "description": "Comma-separated MEGA account emails (up to 10)",
       "value": "timepassmarkus04@gmail.com",
       "required": true
     },
     "MEGA_PASSWORDS": {
-      "description": "Comma-separated MEGA passwords (corresponding to emails)",
+      "description": "Comma-separated MEGA account passwords (corresponding to emails)",
       "value": "SE2-aJGLqYuek97",
       "required": true
     }
   },
-  "buildpacks": [
-    {
-      "url": "heroku/python"
+  "formation": {
+    "worker": {
+      "quantity": 1,
+      "size": "Basic"
     }
-  ]
+  },
+  "addons": [],
+  "scripts": {
+    "postdeploy": "echo '✅ Telegram MEGA File-to-Link Bot deployed successfully on Heroku!'"
+  }
 }
