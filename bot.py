@@ -45,34 +45,32 @@ def generate_download_link(file_id):
     return f"{WEB_URL}/download/{file_id}"
 
 # ----------------- Bot Handlers -----------------
-@bot.on_message(filters.private & filters.document)
+@app.on_message(filters.private & (filters.document | filters.video))
 async def handle_file(client, message):
     if message.from_user.id not in OWNER_IDS:
         await message.reply_text("❌ You are not authorized to upload files.")
         return
 
-    file = message.document
+    file = message.document or message.video
     file_id = file.file_id
-    file_name = file.file_name
+    file_name = getattr(file, "file_name", f"{file.file_unique_id}.mp4")
     file_size = file.file_size
 
     # Save file info in MongoDB
     await save_file_info(file_id, file_name, file_size, message.from_user.id, message.id)
 
-    # Send download link
+    # Generate download link
     download_link = generate_download_link(file_id)
     await message.reply_text(
         f"✅ File uploaded successfully!\n\n📥 Download Link:\n{download_link}",
-        reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Download Now", url=download_link)]]
-        )
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Download Now", url=download_link)]])
     )
 
     # Log in channel
     try:
         await bot.send_message(
             LOG_CHANNEL,
-            f"📂 New File Uploaded:\n\n👤 User: {message.from_user.first_name} [{message.from_user.id}]\n"
+            f"📂 New File Uploaded:\n👤 User: {message.from_user.first_name} [{message.from_user.id}]\n"
             f"📝 Name: {file_name}\n📦 Size: {file_size} bytes\n🔗 Link: {download_link}"
         )
     except FloodWait as e:
@@ -89,10 +87,7 @@ async def download_file(request):
         return web.Response(text="File not found!", status=404)
 
     try:
-        msg = await bot.get_messages(
-            chat_id=file_doc["uploader_id"],
-            message_ids=file_doc["message_id"]
-        )
+        msg = await bot.get_messages(chat_id=file_doc["uploader_id"], message_ids=file_doc["message_id"])
         file_path = await bot.download_media(msg, file_name=file_doc["file_name"])
     except Exception as e:
         print("❌ Error fetching file:", e)
@@ -114,7 +109,7 @@ async def start_web():
 
 # ----------------- Main -----------------
 async def run_bot():
-    # Start web server in background
+    # Start web server
     asyncio.create_task(start_web())
 
     retries = 0
