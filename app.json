@@ -2,9 +2,9 @@
   "name": "MadaraMegaFileBot",
   "description": "A Telegram bot to convert forwarded files into permanent MEGA links with multi-account support.",
   "repository": "https://github.com/demonlord2002/curly-parakeet",
-  "keywords": ["telegram", "file-bot", "mega", "pyrogram", "madara"],
+  "keywords": ["telegram", "file-bot", "mega", "python-telegram-bot", "madara"],
   "buildpacks": [
-    { "url": "https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest.git" },
+    { "url": "https://github.com/heroku/heroku-buildpack-activestorage-preview" },
     { "url": "heroku/python" }
   ],
   "env": {
@@ -47,7 +47,7 @@
   "formation": {
     "worker": {
       "quantity": 1,
-      "size": "Basic"
+      "size": "Free"
     }
   },
   "addons": [],
