@@ -30,7 +30,7 @@
     },
     "WEB_URL": {
       "description": "Your Heroku app URL",
-      "value": "https://yourappname.herokuapp.com"
+      "value": "https://dead7.herokuapp.com"
     }
   },
   "formation": {
