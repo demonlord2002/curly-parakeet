@@ -6,26 +6,32 @@
   "env": {
     "API_ID": {
       "description": "Your Telegram API ID from https://my.telegram.org",
+      "value": "27758016",
       "required": true
     },
     "API_HASH": {
       "description": "Your Telegram API HASH from https://my.telegram.org",
+      "value": "8d34cfffe27ab461eabbf0091b1a27df",
       "required": true
     },
     "BOT_TOKEN": {
       "description": "Your Telegram bot token from BotFather",
+      "value": "8458120677:AAE-_r9xzg3Tg1PchwlwUmMPcBUUqmOP1MM",
       "required": true
     },
     "OWNER_IDS": {
       "description": "Comma-separated Telegram user IDs allowed to use the bot",
+      "value": "7590607726",
       "required": true
     },
     "MEGA_EMAILS": {
       "description": "Comma-separated MEGA emails (up to 10)",
+      "value": "timepassmarkus04@gmail.com",
       "required": true
     },
     "MEGA_PASSWORDS": {
       "description": "Comma-separated MEGA passwords (corresponding to emails)",
+      "value": "SE2-aJGLqYuek97",
       "required": true
     }
   },
