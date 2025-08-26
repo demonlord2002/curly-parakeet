@@ -18,7 +18,7 @@ app = Client(
     api_id=API_ID,
     api_hash=API_HASH,
     bot_token=BOT_TOKEN,
-    workdir="./sessions"  # ensures session storage path exists
+    workdir="./sessions"
 )
 
 # ----------------- Helper Functions -----------------
@@ -52,9 +52,7 @@ async def handle_file(client, message):
     download_link = generate_download_link(file_id)
     await message.reply_text(
         f"✅ File uploaded successfully!\n\n📥 Download Link:\n{download_link}",
-        reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Download Now", url=download_link)]]
-        )
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Download Now", url=download_link)]])
     )
 
     # Log in channel
@@ -77,7 +75,6 @@ async def download_file(request):
         return web.Response(text="File not found!", status=404)
 
     try:
-        # Download Telegram file
         msg = await app.get_messages(chat_id=file_doc["uploader_id"], message_ids=file_id)
         file_path = await app.download_media(msg, file_name=file_doc["file_name"])
     except Exception:
@@ -88,7 +85,6 @@ async def download_file(request):
         headers={"Content-Disposition": f"attachment; filename={file_doc['file_name']}"}
     )
 
-# ----------------- Start Web Server -----------------
 async def start_web():
     app_web = web.Application()
     app_web.add_routes(routes)
@@ -100,13 +96,19 @@ async def start_web():
 
 # ----------------- Main -----------------
 async def main():
-    await start_web()
+    # Start web server in background
+    asyncio.create_task(start_web())
+
+    # Start Pyrogram bot
     await app.start()
     print("🤖 Bot is running...")
+
+    # Keep the bot running
     await idle()
+
+    # Stop bot gracefully
     await app.stop()
 
 if __name__ == "__main__":
-    # Ensure sessions directory exists
     os.makedirs("./sessions", exist_ok=True)
     asyncio.run(main())
