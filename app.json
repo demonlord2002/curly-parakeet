@@ -1,29 +1,30 @@
 {
-  "name": "telegram-mega-file-bot",
-  "description": "Telegram bot to convert forwarded files into permanent MEGA links with multi-account support",
-  "repository": "https://github.com/YourRepoHere",
-  "keywords": ["telegram", "bot", "mega", "file", "uploader"],
+  "name": "MadaraMegaFileBot",
+  "description": "A Telegram bot to convert forwarded files into permanent MEGA links with multi-account support.",
+  "repository": "https://github.com/demonlord2002/curly-parakeet",
+  "keywords": ["telegram", "file-bot", "mega", "pyrogram", "madara"],
   "buildpacks": [
+    { "url": "https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest.git" },
     { "url": "heroku/python" }
   ],
   "env": {
     "API_ID": {
-      "description": "Your Telegram API ID from https://my.telegram.org",
+      "description": "Telegram API ID from https://my.telegram.org",
       "value": "27758016",
       "required": true
     },
     "API_HASH": {
-      "description": "Your Telegram API HASH from https://my.telegram.org",
+      "description": "Telegram API Hash from https://my.telegram.org",
       "value": "8d34cfffe27ab461eabbf0091b1a27df",
       "required": true
     },
     "BOT_TOKEN": {
-      "description": "Your Telegram bot token from BotFather",
+      "description": "Telegram Bot Token from @BotFather",
       "value": "8458120677:AAE-_r9xzg3Tg1PchwlwUmMPcBUUqmOP1MM",
       "required": true
     },
     "OWNER_IDS": {
-      "description": "Comma-separated Telegram user IDs allowed to use the bot",
+      "description": "Comma-separated Telegram User IDs allowed to use the bot",
       "value": "7590607726",
       "required": true
     },
@@ -36,6 +37,11 @@
       "description": "Comma-separated MEGA account passwords (corresponding to emails)",
       "value": "SE2-aJGLqYuek97",
       "required": true
+    },
+    "TMP_DOWNLOAD_PATH": {
+      "description": "Temporary download path for Heroku",
+      "value": "/tmp",
+      "required": true
     }
   },
   "formation": {
@@ -46,6 +52,6 @@
   },
   "addons": [],
   "scripts": {
-    "postdeploy": "echo '✅ Telegram MEGA File-to-Link Bot deployed successfully on Heroku!'"
+    "postdeploy": "echo '✅ Madara MEGA File-to-Link Bot deployed successfully!'"
   }
 }
