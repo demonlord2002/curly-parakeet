@@ -1,0 +1,2 @@
+python-telegram-bot==20.6
+mega.py==0.4.5
