@@ -45,7 +45,7 @@ def generate_download_link(file_id):
     return f"{WEB_URL}/download/{file_id}"
 
 # ----------------- Bot Handlers -----------------
-@app.on_message(filters.private & (filters.document | filters.video))
+@bot.on_message(filters.private & (filters.document | filters.video))
 async def handle_file(client, message):
     if message.from_user.id not in OWNER_IDS:
         await message.reply_text("❌ You are not authorized to upload files.")
@@ -109,7 +109,6 @@ async def start_web():
 
 # ----------------- Main -----------------
 async def run_bot():
-    # Start web server
     asyncio.create_task(start_web())
 
     retries = 0
