@@ -6,23 +6,31 @@ from telegram.ext import Application, MessageHandler, CommandHandler, filters, C
 from mega import Mega
 import config
 
-# Ensure /tmp path exists (Heroku only allows /tmp for writing)
-if not os.path.exists(config.TMP_DOWNLOAD_PATH):
-    os.makedirs(config.TMP_DOWNLOAD_PATH, exist_ok=True)
+# ------------------- TMP PATH -------------------
+# Heroku only allows write access to /tmp
+TMP = config.TMP_DOWNLOAD_PATH
+os.makedirs(TMP, exist_ok=True)
 
-# Logging (Heroku logs go to stdout/stderr)
+# ------------------- LOGGING -------------------
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Initialize MEGA sessions
+# ------------------- INIT MEGA -------------------
 mega_sessions = []
 for acc in config.MEGA_ACCOUNTS:
-    mega = Mega()
-    m = mega.login(acc["email"], acc["password"])
-    mega_sessions.append(m)
+    try:
+        mega = Mega()
+        m = mega.login(acc["email"], acc["password"])
+        mega_sessions.append(m)
+    except Exception as e:
+        logger.warning(f"Failed to login MEGA account {acc['email']}: {e}")
+
+if not mega_sessions:
+    logger.error("❌ No MEGA accounts available! Exiting...")
+    exit(1)
 
 current_account_idx = 0
 
@@ -42,7 +50,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Forward or upload any file, and I will generate a permanent MEGA link for you.\n\n"
         "⚡ Only authorized users can use this bot."
     )
-
     keyboard = [
         [
             InlineKeyboardButton("Owner", url="https://t.me/SunsetOfMe"),
@@ -66,13 +73,17 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     file_name = file_obj.file_name or "file.bin"
-
     await update.message.reply_text("⬇️ Downloading file from Telegram...")
-    file = await context.bot.get_file(file_obj.file_id)
-    local_path = os.path.join(config.TMP_DOWNLOAD_PATH, file_name)
-    await file.download_to_drive(local_path)
 
-    max_retries = len(config.MEGA_ACCOUNTS)
+    try:
+        file = await context.bot.get_file(file_obj.file_id)
+        local_path = os.path.join(TMP, file_name)
+        await file.download_to_drive(local_path)
+    except Exception as e:
+        await update.message.reply_text(f"❌ Failed to download file: {e}")
+        return
+
+    max_retries = len(mega_sessions)
     uploaded, link = None, None
 
     for attempt in range(max_retries):
@@ -88,10 +99,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             continue
     else:
         await update.message.reply_text("❌ All MEGA accounts failed or storage full.")
-        try:
-            os.remove(local_path)
-        except:
-            pass
+        os.remove(local_path)
         return
 
     try:
@@ -108,10 +116,8 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ------------------- MAIN -------------------
 def main():
     app = Application.builder().token(config.BOT_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.ALL, handle_file))
-
     logger.info("🤖 Bot started on Heroku...")
     app.run_polling()
 
