@@ -1,57 +1,47 @@
 {
-  "name": "MadaraMegaFileBot",
-  "description": "A Telegram bot to convert forwarded files into permanent MEGA links with multi-account support.",
-  "repository": "https://github.com/demonlord2002/curly-parakeet",
-  "keywords": ["telegram", "file-bot", "mega", "python-telegram-bot", "madara"],
-  "buildpacks": [
-    { "url": "https://github.com/heroku/heroku-buildpack-activestorage-preview" },
-    { "url": "heroku/python" }
-  ],
+  "name": "file-to-link-bot",
+  "description": "Telegram File-to-Link Bot with MongoDB and direct download links",
+  "repository": "https://github.com/yourusername/yourrepo",
+  "stack": "heroku-20",
   "env": {
     "API_ID": {
-      "description": "Telegram API ID from https://my.telegram.org",
-      "value": "27758016",
-      "required": true
+      "description": "Your Telegram API ID",
+      "value": "123456"
     },
     "API_HASH": {
-      "description": "Telegram API Hash from https://my.telegram.org",
-      "value": "8d34cfffe27ab461eabbf0091b1a27df",
-      "required": true
+      "description": "Your Telegram API Hash",
+      "value": "your_api_hash_here"
     },
     "BOT_TOKEN": {
-      "description": "Telegram Bot Token from @BotFather",
-      "value": "8458120677:AAE-_r9xzg3Tg1PchwlwUmMPcBUUqmOP1MM",
-      "required": true
+      "description": "Telegram Bot Token from BotFather",
+      "value": "your_bot_token_here"
     },
     "OWNER_IDS": {
-      "description": "Comma-separated Telegram User IDs allowed to use the bot",
-      "value": "7590607726",
-      "required": true
+      "description": "Comma separated Telegram user IDs allowed to upload",
+      "value": "123456789"
     },
-    "MEGA_EMAILS": {
-      "description": "Comma-separated MEGA account emails (up to 10)",
-      "value": "timepassmarkus04@gmail.com",
-      "required": true
+    "MONGO_URI": {
+      "description": "MongoDB connection URI",
+      "value": "mongodb+srv://username:password@cluster0.mongodb.net/dbname?retryWrites=true&w=majority"
     },
-    "MEGA_PASSWORDS": {
-      "description": "Comma-separated MEGA account passwords (corresponding to emails)",
-      "value": "SE2-aJGLqYuek97",
-      "required": true
+    "LOG_CHANNEL": {
+      "description": "Telegram Channel ID for logging uploaded files",
+      "value": "-1001234567890"
     },
-    "TMP_DOWNLOAD_PATH": {
-      "description": "Temporary download path for Heroku",
-      "value": "/tmp",
-      "required": true
+    "WEB_URL": {
+      "description": "Your Heroku app URL",
+      "value": "https://yourappname.herokuapp.com"
     }
   },
   "formation": {
     "worker": {
       "quantity": 1,
-      "size": "Standard-1X"
+      "size": "free"
     }
   },
-  "addons": [],
-  "scripts": {
-    "postdeploy": "echo '✅ Madara MEGA File-to-Link Bot deployed successfully!'"
-  }
+  "addons": [
+    {
+      "plan": "mongolab:sandbox"
+    }
+  ]
 }
