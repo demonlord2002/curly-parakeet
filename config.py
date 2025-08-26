@@ -1,26 +1,13 @@
-# config.py
+import os
 
-# ------------------- TELEGRAM -------------------
-API_ID = 123456                # Your Telegram API ID (from https://my.telegram.org)
-API_HASH = "your_api_hash"     # Your Telegram API HASH
-BOT_TOKEN = "your_bot_token"   # Bot token from BotFather
+API_ID = int(os.getenv("API_ID"))
+API_HASH = os.getenv("API_HASH")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# ------------------- OWNER -------------------
-OWNER_IDS = [
-    123456789,  # Add your Telegram user ID
-    # Add more owner IDs if needed
-]
+OWNER_IDS = list(map(int, os.getenv("OWNER_IDS").split(",")))
 
-# ------------------- MEGA ACCOUNTS -------------------
-# Add up to 10 MEGA accounts. The bot rotates automatically when storage full.
-# Format: {"email": "your_email", "password": "your_password"}
-MEGA_ACCOUNTS = [
-    {"email": "mega1@example.com", "password": "password1"},
-    {"email": "mega2@example.com", "password": "password2"},
-    {"email": "mega3@example.com", "password": "password3"},
-    # Add more up to 10
-]
+emails = os.getenv("MEGA_EMAILS").split(",")
+passwords = os.getenv("MEGA_PASSWORDS").split(",")
+MEGA_ACCOUNTS = [{"email": e, "password": p} for e, p in zip(emails, passwords)]
 
-# ------------------- TEMPORARY DOWNLOAD PATH -------------------
-# Heroku and VPS compatible
 TMP_DOWNLOAD_PATH = "/tmp"
