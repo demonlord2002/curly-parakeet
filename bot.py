@@ -7,7 +7,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import API_ID, API_HASH, BOT_TOKEN, OWNER_IDS, MONGO_URI, LOG_CHANNEL, WEB_PORT, WEB_URL
 from aiohttp import web
-from pyrogram.errors import FloodWait, BadMsgNotification
+from pyrogram.errors import FloodWait
 
 # ----------------- Ensure UTC Time -----------------
 os.environ["TZ"] = "UTC"
@@ -23,7 +23,7 @@ db = mongo_client["file_to_link_bot"]
 files_collection = db["files"]
 
 # ----------------- Pyrogram Client -----------------
-app = Client(
+bot = Client(
     "file_link_bot",
     api_id=API_ID,
     api_hash=API_HASH,
@@ -45,7 +45,7 @@ def generate_download_link(file_id):
     return f"{WEB_URL}/download/{file_id}"
 
 # ----------------- Bot Handlers -----------------
-@app.on_message(filters.private & filters.document)
+@bot.on_message(filters.private & filters.document)
 async def handle_file(client, message):
     if message.from_user.id not in OWNER_IDS:
         await message.reply_text("❌ You are not authorized to upload files.")
@@ -56,19 +56,21 @@ async def handle_file(client, message):
     file_name = file.file_name
     file_size = file.file_size
 
-    # Save file info in MongoDB (store message_id too for retrieval)
+    # Save file info in MongoDB
     await save_file_info(file_id, file_name, file_size, message.from_user.id, message.id)
 
     # Send download link
     download_link = generate_download_link(file_id)
     await message.reply_text(
         f"✅ File uploaded successfully!\n\n📥 Download Link:\n{download_link}",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Download Now", url=download_link)]])
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Download Now", url=download_link)]]
+        )
     )
 
     # Log in channel
     try:
-        await app.send_message(
+        await bot.send_message(
             LOG_CHANNEL,
             f"📂 New File Uploaded:\n\n👤 User: {message.from_user.first_name} [{message.from_user.id}]\n"
             f"📝 Name: {file_name}\n📦 Size: {file_size} bytes\n🔗 Link: {download_link}"
@@ -87,9 +89,11 @@ async def download_file(request):
         return web.Response(text="File not found!", status=404)
 
     try:
-        # Get the original message where file was uploaded
-        msg = await app.get_messages(chat_id=file_doc["uploader_id"], message_ids=file_doc["message_id"])
-        file_path = await app.download_media(msg, file_name=file_doc["file_name"])
+        msg = await bot.get_messages(
+            chat_id=file_doc["uploader_id"],
+            message_ids=file_doc["message_id"]
+        )
+        file_path = await bot.download_media(msg, file_name=file_doc["file_name"])
     except Exception as e:
         print("❌ Error fetching file:", e)
         return web.Response(text="Error fetching file!", status=500)
@@ -110,28 +114,22 @@ async def start_web():
 
 # ----------------- Main -----------------
 async def run_bot():
+    # Start web server in background
     asyncio.create_task(start_web())
 
     retries = 0
-    while retries < 10:  # try 10 times before giving up
+    while retries < 10:
         try:
-            await app.start()
+            await bot.start()
             print("🤖 Bot connected successfully!")
             await idle()
             break
-        except BadMsgNotification as e:
-            if e.value == 16:
-                retries += 1
-                print(f"⚠️ Time sync issue (attempt {retries}), retrying in 10s...")
-                await asyncio.sleep(10)
-            else:
-                raise
         except Exception as e:
             retries += 1
             print(f"⚠️ Start failed (attempt {retries}): {e}")
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)
 
-    await app.stop()
+    await bot.stop()
     print("❌ Bot stopped.")
 
 if __name__ == "__main__":
