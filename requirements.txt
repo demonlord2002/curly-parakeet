@@ -1,3 +1,4 @@
 python-telegram-bot==20.6
 mega.py==1.0.8
-tenacity>=8.2.3
+tenacity==8.2.2
+requests==2.31.0
