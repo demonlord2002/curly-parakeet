@@ -1,6 +1,6 @@
 import os
 import asyncio
-from pyrogram import Client, filters
+from pyrogram import Client, filters, idle
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import API_ID, API_HASH, BOT_TOKEN, OWNER_IDS, MONGO_URI, LOG_CHANNEL, WEB_PORT, WEB_URL
@@ -13,7 +13,13 @@ db = mongo_client["file_to_link_bot"]
 files_collection = db["files"]
 
 # ----------------- Pyrogram Client -----------------
-app = Client("file_link_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client(
+    "file_link_bot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN,
+    workdir="./sessions"  # ensures session storage path exists
+)
 
 # ----------------- Helper Functions -----------------
 async def save_file_info(file_id, file_name, file_size, uploader_id):
@@ -71,15 +77,16 @@ async def download_file(request):
         return web.Response(text="File not found!", status=404)
 
     try:
-        # Get the Telegram file path
-        file = await app.get_messages(chat_id=file_doc["uploader_id"], message_ids=file_id)
-        file_path = await app.download_media(file, file_name=file_doc["file_name"])
+        # Download Telegram file
+        msg = await app.get_messages(chat_id=file_doc["uploader_id"], message_ids=file_id)
+        file_path = await app.download_media(msg, file_name=file_doc["file_name"])
     except Exception:
         return web.Response(text="Error fetching file!", status=500)
 
-    return web.FileResponse(file_path, headers={
-        "Content-Disposition": f"attachment; filename={file_doc['file_name']}"
-    })
+    return web.FileResponse(
+        file_path,
+        headers={"Content-Disposition": f"attachment; filename={file_doc['file_name']}"}
+    )
 
 # ----------------- Start Web Server -----------------
 async def start_web():
@@ -97,7 +104,9 @@ async def main():
     await app.start()
     print("🤖 Bot is running...")
     await idle()
+    await app.stop()
 
 if __name__ == "__main__":
-    from pyrogram import idle
+    # Ensure sessions directory exists
+    os.makedirs("./sessions", exist_ok=True)
     asyncio.run(main())
