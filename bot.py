@@ -51,10 +51,11 @@ async def handle_file(client, message):
         await message.reply_text("❌ You are not authorized to upload files.")
         return
 
+    # Select document or video
     file = message.document or message.video
     file_id = file.file_id
     file_name = getattr(file, "file_name", f"{file.file_unique_id}.mp4")
-    file_size = file.file_size
+    file_size = getattr(file, "file_size", 0)
 
     # Save file info in MongoDB
     await save_file_info(file_id, file_name, file_size, message.from_user.id, message.id)
@@ -63,10 +64,12 @@ async def handle_file(client, message):
     download_link = generate_download_link(file_id)
     await message.reply_text(
         f"✅ File uploaded successfully!\n\n📥 Download Link:\n{download_link}",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Download Now", url=download_link)]])
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Download Now", url=download_link)]]
+        )
     )
 
-    # Log in channel
+    # Log upload in channel
     try:
         await bot.send_message(
             LOG_CHANNEL,
@@ -87,7 +90,11 @@ async def download_file(request):
         return web.Response(text="File not found!", status=404)
 
     try:
-        msg = await bot.get_messages(chat_id=file_doc["uploader_id"], message_ids=file_doc["message_id"])
+        # Get the original Telegram message
+        msg = await bot.get_messages(
+            chat_id=file_doc["uploader_id"],
+            message_ids=file_doc["message_id"]
+        )
         file_path = await bot.download_media(msg, file_name=file_doc["file_name"])
     except Exception as e:
         print("❌ Error fetching file:", e)
@@ -109,6 +116,7 @@ async def start_web():
 
 # ----------------- Main -----------------
 async def run_bot():
+    # Start web server in background
     asyncio.create_task(start_web())
 
     retries = 0
