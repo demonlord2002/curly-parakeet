@@ -9,7 +9,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN", "8458120677:AAE-_r9xzg3Tg1PchwlwUmMPcBUU
 OWNER_IDS = list(map(int, os.environ.get("OWNER_IDS", "7590607726").split(",")))  # Comma separated IDs
 
 # ========== MongoDB ==========
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://username:password@cluster0.mongodb.net/dbname?retryWrites=true&w=majority")
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://rubesh08virat:rubesh08virat@cluster0.d33p1rm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 
 # ========== Log Channel ==========
 LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", "-1002718440283"))  # Telegram channel ID for logging
