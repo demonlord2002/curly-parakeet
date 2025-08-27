@@ -11,7 +11,7 @@
     },
     "HEROKU_APP_NAME": {
       "description": "Your Heroku App name (same as above)",
-      "value": ""
+      "value": "devm09"
     }
   },
   "buildpacks": [
