@@ -1,43 +1,22 @@
-
 {
-  "name": "file-to-link-bot",
-  "description": "Telegram File-to-Link Bot with MongoDB and direct download links",
+  "name": "Telegram File to Link Bot",
+  "description": "A Telegram bot that generates direct download links for files",
   "repository": "https://github.com/demonlord2002/curly-parakeet",
-  "stack": "heroku-22",
+  "logo": "https://img.icons8.com/color/96/000000/telegram-app.png",
+  "keywords": ["telegram", "bot", "file", "link", "download"],
   "env": {
-    "API_ID": {
-      "description": "Your Telegram API ID",
-      "value": "27758016"
-    },
-    "API_HASH": {
-      "description": "Your Telegram API Hash",
-      "value": "8d34cfffe27ab461eabbf0091b1a27df"
-    },
     "BOT_TOKEN": {
-      "description": "Telegram Bot Token from BotFather",
-      "value": "8458120677:AAE-_r9xzg3Tg1PchwlwUmMPcBUUqmOP1MM"
+      "description": "Your Telegram Bot Token from @BotFather",
+      "value": ""
     },
-    "OWNER_IDS": {
-      "description": "Comma separated Telegram user IDs allowed to upload",
-      "value": "7590607726"
-    },
-    "MONGO_URI": {
-      "description": "MongoDB connection URI",
-      "value": "mongodb+srv://rubesh08virat:rubesh08virat@cluster0.d33p1rm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-    },
-    "LOG_CHANNEL": {
-      "description": "Telegram Channel ID for logging uploaded files",
-      "value": "-1002718440283"
-    },
-    "WEB_URL": {
-      "description": "Your Heroku app URL",
-      "value": "https://dead7.herokuapp.com"
+    "HEROKU_APP_NAME": {
+      "description": "Your Heroku App name (same as above)",
+      "value": ""
     }
   },
-  "formation": {
-    "worker": {
-      "quantity": 1,
-      "size": "Standard-1X"
+  "buildpacks": [
+    {
+      "url": "heroku/python"
     }
-  }
+  ]
 }
