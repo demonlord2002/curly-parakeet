@@ -1,139 +1,106 @@
 import os
-import asyncio
-import datetime
-import time
-from pyrogram import Client, filters, idle
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from motor.motor_asyncio import AsyncIOMotorClient
-from config import API_ID, API_HASH, BOT_TOKEN, OWNER_IDS, MONGO_URI, LOG_CHANNEL, WEB_PORT, WEB_URL
-from aiohttp import web
-from pyrogram.errors import FloodWait
+import logging
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from config import BOT_TOKEN, HEROKU_APP_NAME, PORT
 
-# ----------------- Ensure UTC Time -----------------
-os.environ["TZ"] = "UTC"
-try:
-    time.tzset()
-except Exception:
-    pass
-print("⏱ Current UTC time:", datetime.datetime.utcnow())
-
-# ----------------- MongoDB Setup -----------------
-mongo_client = AsyncIOMotorClient(MONGO_URI)
-db = mongo_client["file_to_link_bot"]
-files_collection = db["files"]
-
-# ----------------- Pyrogram Client -----------------
-bot = Client(
-    "file_link_bot",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    bot_token=BOT_TOKEN,
-    workdir="./sessions"
+# Set up logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
 )
+logger = logging.getLogger(__name__)
 
-# ----------------- Helper Functions -----------------
-async def save_file_info(file_id, file_name, file_size, uploader_id, message_id):
-    await files_collection.insert_one({
-        "file_id": file_id,
-        "file_name": file_name,
-        "file_size": file_size,
-        "uploader_id": uploader_id,
-        "message_id": message_id
-    })
-
-def generate_download_link(file_id):
-    return f"{WEB_URL}/download/{file_id}"
-
-# ----------------- Bot Handlers -----------------
-@bot.on_message(filters.private & (filters.document | filters.video))
-async def handle_file(client, message):
-    if message.from_user.id not in OWNER_IDS:
-        await message.reply_text("❌ You are not authorized to upload files.")
-        return
-
-    # Select document or video
-    file = message.document or message.video
-    file_id = file.file_id
-    file_name = getattr(file, "file_name", f"{file.file_unique_id}.mp4")
-    file_size = getattr(file, "file_size", 0)
-
-    # Save file info in MongoDB
-    await save_file_info(file_id, file_name, file_size, message.from_user.id, message.id)
-
-    # Generate download link
-    download_link = generate_download_link(file_id)
-    await message.reply_text(
-        f"✅ File uploaded successfully!\n\n📥 Download Link:\n{download_link}",
-        reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Download Now", url=download_link)]]
-        )
+# Start command
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "Hi! I'm a File to Link Bot. Send me any MP4 or MKV file and I'll give you a direct download link!"
     )
 
-    # Log upload in channel
+# Help command
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "Just send me a video file (MP4/MKV) and I'll generate a direct download link for you!"
+    )
+
+# Handle video files
+async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        await bot.send_message(
-            LOG_CHANNEL,
-            f"📂 New File Uploaded:\n👤 User: {message.from_user.first_name} [{message.from_user.id}]\n"
-            f"📝 Name: {file_name}\n📦 Size: {file_size} bytes\n🔗 Link: {download_link}"
+        message = update.message
+        
+        if message.video:
+            file_id = message.video.file_id
+            file_name = message.video.file_name or "video.mp4"
+            file_size = message.video.file_size
+        elif message.document:
+            # Check if it's an MP4 or MKV file
+            mime_type = message.document.mime_type
+            file_name = message.document.file_name or "file"
+            
+            if mime_type not in ['video/mp4', 'video/x-matroska'] and not file_name.endswith(('.mp4', '.mkv')):
+                await message.reply_text("Please send only MP4 or MKV files.")
+                return
+                
+            file_id = message.document.file_id
+            file_size = message.document.file_size
+        else:
+            await message.reply_text("Please send a video file.")
+            return
+        
+        # Check file size (max 2GB for Telegram bots)
+        if file_size > 2000 * 1024 * 1024:
+            await message.reply_text("File is too large. Maximum size is 2GB.")
+            return
+        
+        # Get file info
+        file = await context.bot.get_file(file_id)
+        
+        # Generate direct download link
+        if HEROKU_APP_NAME:
+            # For Heroku deployment
+            direct_link = f"https://{HEROKU_APP_NAME}.herokuapp.com/{file_id}/{file_name}"
+        else:
+            # For local development
+            direct_link = file.file_path
+        
+        # Send the link to user
+        await message.reply_text(
+            f"Here's your direct download link:\n\n{direct_link}\n\n"
+            f"File: {file_name}\n"
+            f"Size: {file_size // (1024 * 1024)} MB\n\n"
+            "Click the link to download the file directly."
         )
-    except FloodWait as e:
-        await asyncio.sleep(e.x)
-
-# ----------------- Web Server -----------------
-routes = web.RouteTableDef()
-
-@routes.get("/download/{file_id}")
-async def download_file(request):
-    file_id = request.match_info["file_id"]
-    file_doc = await files_collection.find_one({"file_id": file_id})
-    if not file_doc:
-        return web.Response(text="File not found!", status=404)
-
-    try:
-        # Get the original Telegram message
-        msg = await bot.get_messages(
-            chat_id=file_doc["uploader_id"],
-            message_ids=file_doc["message_id"]
-        )
-        file_path = await bot.download_media(msg, file_name=file_doc["file_name"])
+        
     except Exception as e:
-        print("❌ Error fetching file:", e)
-        return web.Response(text="Error fetching file!", status=500)
+        logger.error(f"Error handling video: {e}")
+        await update.message.reply_text("Sorry, something went wrong. Please try again.")
 
-    return web.FileResponse(
-        file_path,
-        headers={"Content-Disposition": f"attachment; filename={file_doc['file_name']}"}
-    )
+# Error handler
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.error(f"Update {update} caused error {context.error}")
 
-async def start_web():
-    app_web = web.Application()
-    app_web.add_routes(routes)
-    runner = web.AppRunner(app_web)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", WEB_PORT)
-    await site.start()
-    print(f"🌐 Web server running on port {WEB_PORT}")
-
-# ----------------- Main -----------------
-async def run_bot():
-    # Start web server in background
-    asyncio.create_task(start_web())
-
-    retries = 0
-    while retries < 10:
-        try:
-            await bot.start()
-            print("🤖 Bot connected successfully!")
-            await idle()
-            break
-        except Exception as e:
-            retries += 1
-            print(f"⚠️ Start failed (attempt {retries}): {e}")
-            await asyncio.sleep(10)
-
-    await bot.stop()
-    print("❌ Bot stopped.")
+def main():
+    # Create the Application
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Add handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(MessageHandler(filters.VIDEO | filters.Document.ALL, handle_video))
+    application.add_error_handler(error_handler)
+    
+    # Start the bot
+    if HEROKU_APP_NAME:
+        # Running on Heroku
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=BOT_TOKEN,
+            webhook_url=f"https://{HEROKU_APP_NAME}.herokuapp.com/{BOT_TOKEN}"
+        )
+    else:
+        # Running locally
+        application.run_polling()
 
 if __name__ == "__main__":
-    os.makedirs("./sessions", exist_ok=True)
-    asyncio.run(run_bot())
+    main()
