@@ -7,7 +7,7 @@
   "env": {
     "BOT_TOKEN": {
       "description": "Your Telegram Bot Token from @BotFather",
-      "value": ""
+      "value": "8458120677:AAE-_r9xzg3Tg1PchwlwUmMPcBUUqmOP1MM"
     },
     "HEROKU_APP_NAME": {
       "description": "Your Heroku App name (same as above)",
