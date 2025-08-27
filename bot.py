@@ -2,7 +2,7 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from config import BOT_TOKEN, HEROKU_APP_NAME, PORT, ALLOWED_EXTENSIONS, MAX_FILE_SIZE, ADMIN_ID
+from config import BOT_TOKEN, HEROKU_APP_NAME, PORT, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
 
 # Set up logging
 logging.basicConfig(
@@ -10,9 +10,6 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-# Store processed files temporarily (in production you might want to use a database)
-file_store = {}
 
 # Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -59,7 +56,6 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         message = update.message
-        user_id = message.from_user.id
         
         if message.video:
             file_id = message.video.file_id
@@ -93,14 +89,6 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Get file info
         file = await context.bot.get_file(file_id)
-        
-        # Store file information
-        file_store[file_id] = {
-            'file_name': file_name,
-            'file_size': file_size,
-            'mime_type': mime_type,
-            'user_id': user_id
-        }
         
         # Generate direct download link
         if HEROKU_APP_NAME:
@@ -158,7 +146,8 @@ def main():
             listen="0.0.0.0",
             port=PORT,
             url_path=BOT_TOKEN,
-            webhook_url=f"https://{HEROKU_APP_NAME}.herokuapp.com/{BOT_TOKEN}"
+            webhook_url=f"https://{HEROKU_APP_NAME}.herokuapp.com/{BOT_TOKEN}",
+            drop_pending_updates=True
         )
     else:
         # Running locally
