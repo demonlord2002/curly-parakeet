@@ -1,22 +1,55 @@
 {
-  "name": "Telegram File to Link Bot",
-  "description": "A Telegram bot that generates direct download links for files",
-  "repository": "https://github.com/demonlord2002/curly-parakeet",
-  "logo": "https://img.icons8.com/color/96/000000/telegram-app.png",
-  "keywords": ["telegram", "bot", "file", "link", "download"],
+  "name": "file-share-bot",
+  "description": "Telegram bot to save files and generate permanent share links using MongoDB (Heroku supported).",
+  "repository": "https://github.com/yourusername/file-share-bot",
+  "keywords": ["telegram", "bot", "file-share", "mongodb", "pyrogram"],
+  "buildpacks": [
+    { "url": "heroku/python" }
+  ],
   "env": {
+    "API_ID": {
+      "description": "Your Telegram API ID from my.telegram.org/apps",
+      "value": "22201946",
+      "required": true
+    },
+    "API_HASH": {
+      "description": "Your Telegram API Hash from my.telegram.org/apps",
+      "value": "f4e7f0de47a09671133ecafa6920ebbe",
+      "required": true
+    },
     "BOT_TOKEN": {
       "description": "Your Telegram Bot Token from @BotFather",
-      "value": "8458120677:AAE-_r9xzg3Tg1PchwlwUmMPcBUUqmOP1MM"
+      "value": "8458120677:AAE-_r9xzg3Tg1PchwlwUmMPcBUUqmOP1MM",
+      "required": true
     },
-    "HEROKU_APP_NAME": {
-      "description": "Your Heroku App name (same as above)",
-      "value": "devm09"
+    "BOT_USERNAME": {
+      "description": "Your bot username without @ (used to build share links)",
+      "value": "FastFileLinkerBot",
+      "required": true
+    },
+    "MONGO_URI": {
+      "description": "MongoDB connection URI (Atlas or local)",
+      "value": "mongodb+srv://drdoom2003p:drdoom2003p@cluster0.fnhjrtn.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
+      "required": true
+    },
+    "ADMIN_IDS": {
+      "description": "Comma-separated Telegram user IDs of bot admins",
+      "value": "7590607726",
+      "required": true
+    },
+    "MAX_FILE_SIZE_MB": {
+      "description": "Maximum file size (in MB) allowed for upload",
+      "value": "2048"
     }
   },
-  "buildpacks": [
-    {
-      "url": "heroku/python"
+  "formation": {
+    "worker": {
+      "quantity": 1,
+      "size": "Basic"
     }
-  ]
+  },
+  "addons": [],
+  "scripts": {
+    "postdeploy": "echo '✅ File Share Bot deployed successfully on Heroku!'"
+  }
 }
