@@ -98,37 +98,27 @@ async def verify_subscription_cb(client, callback_query):
     else:
         await callback_query.answer("❌ Not subscribed yet! Join first ⚡", show_alert=True)
 
-# -------- FAST MULTI-CHUNK DOWNLOAD ----------
+# -------- SAFE FAST DOWNLOADER ----------
 async def download_file(url, filepath, status):
     """
-    High-speed multi-chunk downloader (~10MB/s if server allows)
+    Safe high-speed streaming download.
+    Writes directly to file, no chunk loss.
     """
     start_time = time.time()
-    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=50)) as session:
-        async with session.head(url) as head_resp:
-            total_size = int(head_resp.headers.get("Content-Length", 0))
-        chunk_size = 4 * 1024 * 1024  # 4MB per chunk
-        chunks = [(i, min(i + chunk_size - 1, total_size - 1)) for i in range(0, total_size, chunk_size)]
-        downloaded_data = [None] * len(chunks)
-        last_update = start_time
+    downloaded = 0
+    chunk_size = 4 * 1024 * 1024  # 4MB chunks
 
-        async def download_chunk(idx, start, end):
-            nonlocal last_update
-            headers = {"Range": f"bytes={start}-{end}"}
-            async with session.get(url, headers=headers) as resp:
-                downloaded_data[idx] = await resp.read()
-                downloaded_bytes = sum(len(c) for c in downloaded_data if c)
-                if time.time() - last_update > 0.5:
-                    text = await progress_bar(downloaded_bytes, total_size, start_time, "📥 Downloading")
-                    try: await status.edit_text(text)
-                    except: pass
-                    last_update = time.time()
-
-        await asyncio.gather(*[download_chunk(i, s, e) for i, (s, e) in enumerate(chunks)])
-
-        with open(filepath, "wb") as f:
-            for chunk in downloaded_data:
-                f.write(chunk)
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            total_size = int(resp.headers.get("Content-Length", 0))
+            with open(filepath, "wb") as f:
+                async for chunk in resp.content.iter_chunked(chunk_size):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        text = await progress_bar(downloaded, total_size, start_time, "📥 Downloading")
+                        try: await status.edit_text(text)
+                        except: pass
 
 # -------- URL HANDLER ----------
 @app.on_message(filters.text & ~filters.command(["start"]))
@@ -178,5 +168,5 @@ async def url_handler(client, message):
             os.remove(filepath)
 
 # ---------------- RUN ----------------
-print("Madara URL Uploader Bot started... 🚀 High-Speed Mode ✅")
+print("Madara URL Uploader Bot started... 🚀 FULL-SIZE High-Speed Mode ✅")
 app.run()
