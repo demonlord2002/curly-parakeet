@@ -28,29 +28,22 @@ OWNER_IDS = [Config.OWNER_ID]
 async def progress_bar(current, total, start, stage):
     now = time.time()
     diff = now - start
-    percent = current * 100 / total if total != 0 else 0
-    speed = current / diff if diff != 0 else 0
+    percent = current * 100 / total if total else 0
+    speed = current / diff if diff else 0
     bar_length = 12
     filled = int(bar_length * percent / 100)
     bar = "▓" * filled + "░" * (bar_length - filled)
-    eta = (total - current) / speed if speed != 0 else 0
-    return f"{stage}:   {bar} {percent:.2f}% | {speed/1024/1024:.2f} MB/s | ETA: {int(eta)}s"
+    eta = (total - current) / speed if speed else 0
+    return f"{stage}: {bar} {percent:.2f}% | {speed/1024/1024:.2f} MB/s | ETA: {int(eta)}s"
 
 # -------- FORCE SUBSCRIBE CHECK ----------
 async def is_subscribed(user_id: int) -> bool:
-    """
-    Check if user is subscribed to FORCE_SUB_CHANNEL.
-    Works with both @username and channel ID (-100xxxx).
-    """
     try:
-        channel = Config.FORCE_SUB_CHANNEL
-        # Pyrogram accepts @username or -100id directly
-        member = await app.get_chat_member(channel, user_id)
+        member = await app.get_chat_member(Config.FORCE_SUB_CHANNEL, user_id)
         return member.status not in ["left", "kicked"]
     except UserNotParticipant:
         return False
     except FloodWait as e:
-        print(f"FloodWait: sleeping {e.value}s")
         await asyncio.sleep(e.value)
         return await is_subscribed(user_id)
     except Exception as e:
@@ -59,16 +52,14 @@ async def is_subscribed(user_id: int) -> bool:
 
 # -------- FORCE SUBSCRIBE PROMPT ----------
 async def send_force_subscribe_prompt(message):
-    channel = Config.FORCE_SUB_CHANNEL
     btn = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🚪 Join Channel", url=f"https://t.me/{channel.replace('@','')}"),
+            InlineKeyboardButton("🚪 Join Channel", url=f"https://t.me/{Config.FORCE_SUB_CHANNEL.replace('@','')}"),
             InlineKeyboardButton("✅ Verify", callback_data="verify_sub")
         ]
     ])
     await message.reply_text(
-        "⚡ **Join our Support Channel to unlock access!** ⚡\n\n"
-        "🔒 Your access is locked until you join ❤️🥷",
+        "⚡ **Join our Support Channel to unlock access!** ⚡\n🔒 Access locked until you join ❤️🥷",
         reply_markup=btn
     )
 
@@ -76,12 +67,9 @@ async def send_force_subscribe_prompt(message):
 @app.on_message(filters.command("start"))
 async def start_cmd(client, message):
     user_id = message.from_user.id
-    first_name = message.from_user.first_name
-    username = message.from_user.username
-
     users_col.update_one(
         {"user_id": user_id},
-        {"$set": {"first_name": first_name, "username": username}},
+        {"$set": {"first_name": message.from_user.first_name, "username": message.from_user.username}},
         upsert=True
     )
 
@@ -94,11 +82,9 @@ async def start_cmd(client, message):
         [InlineKeyboardButton("👤 Owner", url=f"https://t.me/{Config.OWNER_USERNAME}")]
     ])
     await message.reply_text(
-        f"**🔥 MADARA URL UPLOADER 🔥**\n\n"
-        f"👋 Hello **{first_name}**!\n"
-        "➤ Send me any **Direct Video URL** (.mp4/.mkv)\n"
+        f"**🔥 MADARA URL UPLOADER 🔥**\n\n👋 Hello **{message.from_user.first_name}**!\n"
+        "➤ Send any **Direct Video URL** (.mp4/.mkv)\n"
         "➤ I will **download + upload** it at ⚡ high speed ⚡\n"
-        "➤ Only **.mp4 / .mkv** are accepted\n\n"
         "**⚡ Speed Beast Mode Activated ⚡**",
         reply_markup=btn
     )
@@ -106,47 +92,39 @@ async def start_cmd(client, message):
 # -------- VERIFY CALLBACK ----------
 @app.on_callback_query(filters.regex("verify_sub"))
 async def verify_subscription_cb(client, callback_query):
-    user_id = callback_query.from_user.id
-    if await is_subscribed(user_id):
+    if await is_subscribed(callback_query.from_user.id):
         await callback_query.message.edit_text("✅ Verified! Welcome to Madara Family ❤️")
         await start_cmd(client, callback_query.message)
     else:
         await callback_query.answer("❌ Not subscribed yet! Join first ⚡", show_alert=True)
 
-# -------- MULTI-CHUNK DOWNLOAD HANDLER ----------
+# -------- FAST MULTI-CHUNK DOWNLOAD ----------
 async def download_file(url, filepath, status):
-    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=40)) as session:
-        async with session.head(url) as resp:
-            total_size = int(resp.headers.get("Content-Length", 0))
-
-        chunk_size = 16 * 1024 * 1024
-        tasks = []
-        downloaded_data = [None] * ((total_size // chunk_size) + 1)
-        start_time = time.time()
+    """
+    High-speed multi-chunk downloader (~10MB/s if server allows)
+    """
+    start_time = time.time()
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=50)) as session:
+        async with session.head(url) as head_resp:
+            total_size = int(head_resp.headers.get("Content-Length", 0))
+        chunk_size = 4 * 1024 * 1024  # 4MB per chunk
+        chunks = [(i, min(i + chunk_size - 1, total_size - 1)) for i in range(0, total_size, chunk_size)]
+        downloaded_data = [None] * len(chunks)
         last_update = start_time
 
         async def download_chunk(idx, start, end):
             nonlocal last_update
             headers = {"Range": f"bytes={start}-{end}"}
-            async with session.get(url, headers=headers) as r:
-                data = await r.read()
-                downloaded_data[idx] = data
-                downloaded_bytes = sum(len(x) for x in downloaded_data if x)
-                if time.time() - last_update > 1.0:
+            async with session.get(url, headers=headers) as resp:
+                downloaded_data[idx] = await resp.read()
+                downloaded_bytes = sum(len(c) for c in downloaded_data if c)
+                if time.time() - last_update > 0.5:
                     text = await progress_bar(downloaded_bytes, total_size, start_time, "📥 Downloading")
-                    try:
-                        await status.edit_text(text)
-                    except:
-                        pass
+                    try: await status.edit_text(text)
+                    except: pass
                     last_update = time.time()
 
-        for i in range(0, total_size, chunk_size):
-            start = i
-            end = min(i + chunk_size - 1, total_size - 1)
-            idx = i // chunk_size
-            tasks.append(download_chunk(idx, start, end))
-
-        await asyncio.gather(*tasks)
+        await asyncio.gather(*[download_chunk(i, s, e) for i, (s, e) in enumerate(chunks)])
 
         with open(filepath, "wb") as f:
             for chunk in downloaded_data:
@@ -162,12 +140,11 @@ async def url_handler(client, message):
 
     url = message.text.strip()
     filename = url.split("/")[-1].split("?")[0]
-    ext = os.path.splitext(filename)[-1].lower()
-    if ext not in Config.ALLOWED_EXTENSIONS:
+    if not any(filename.endswith(ext) for ext in Config.ALLOWED_EXTENSIONS):
         filename += ".mkv"
 
-    filepath = os.path.join("downloads", filename)
     os.makedirs("downloads", exist_ok=True)
+    filepath = os.path.join("downloads", filename)
     status = await message.reply_text("📥 Starting download...")
 
     try:
@@ -183,10 +160,8 @@ async def url_handler(client, message):
             if now - last_update >= 1 or current == total:
                 last_update = now
                 text = await progress_bar(current, total, up_start, "📤 Uploading")
-                try:
-                    await status.edit_text(text)
-                except:
-                    pass
+                try: await status.edit_text(text)
+                except: pass
 
         await client.send_document(
             chat_id=message.chat.id,
@@ -198,11 +173,10 @@ async def url_handler(client, message):
 
     except Exception as e:
         await status.edit_text(f"❌ Error: {e}")
-
     finally:
         if os.path.exists(filepath):
             os.remove(filepath)
 
 # ---------------- RUN ----------------
-print("Madara URL Uploader Bot started... SUPER SPEED MODE ✅")
+print("Madara URL Uploader Bot started... 🚀 High-Speed Mode ✅")
 app.run()
