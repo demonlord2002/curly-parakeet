@@ -10,7 +10,7 @@ from config import Config
 
 # ---------------- INIT ----------------
 app = Client(
-    "madara_url_uploader",
+    "rin_url_uploader",
     api_id=Config.API_ID,
     api_hash=Config.API_HASH,
     bot_token=Config.BOT_TOKEN
@@ -18,7 +18,7 @@ app = Client(
 
 # ---------------- MONGO ----------------
 mongo = MongoClient(Config.MONGO_URI)
-db = mongo["madara_bot"]
+db = mongo["rin_bot"]
 users_col = db["users"]
 
 # ---------------- OWNER ----------------
@@ -73,7 +73,7 @@ async def start_cmd(client, message):
     user_id = message.from_user.id
     users_col.update_one(
         {"user_id": user_id},
-        {"$set": {"first_name": message.from_user.first_name, "username": message.from_user.username}},
+        {"$set": {"first_name": message.from_user.first_name, "username": message.from_user.username, "joined_at": time.time()}},
         upsert=True
     )
     if not await is_subscribed(user_id):
@@ -87,7 +87,7 @@ async def start_cmd(client, message):
         ]
     ])
 
-    start_image_url = "YOUR_START_IMAGE_URL_HERE"  # <-- Replace this with your image URL
+    start_image_url = "YOUR_START_IMAGE_URL_HERE"  # Replace with your image URL
 
     await message.reply_photo(
         photo=start_image_url,
@@ -103,7 +103,6 @@ async def start_cmd(client, message):
         reply_markup=btn
     )
 
-
 # -------- VERIFY CALLBACK ----------
 @app.on_callback_query(filters.regex("verify_sub"))
 async def verify_subscription_cb(client, callback_query):
@@ -117,7 +116,7 @@ async def verify_subscription_cb(client, callback_query):
 async def download_file(url, filepath, status):
     start_time = time.time()
     downloaded = 0
-    chunk_size = 16 * 1024 * 1024  # 16 MB chunks
+    chunk_size = 16 * 1024 * 1024  # 16 MB
     last_update = 0
 
     async with aiohttp.ClientSession() as session:
@@ -163,11 +162,9 @@ async def url_handler(client, message):
     status = await message.reply_text("📥 Starting download...")
 
     try:
-        # Download
         await download_file(url, filepath, status)
         await status.edit_text("✅ Download completed. Starting upload...")
 
-        # Upload with progress
         up_start = time.time()
         last_update = 0
         async def upload_progress(current, total):
@@ -213,7 +210,6 @@ async def broadcast_handler(client, message):
     for user in users:
         try:
             uid = user["user_id"]
-
             # Media broadcast
             if hasattr(b_msg, "photo") and b_msg.photo:
                 await app.send_photo(uid, b_msg.photo.file_id, caption=b_msg.caption or "")
@@ -242,5 +238,5 @@ async def broadcast_handler(client, message):
     )
 
 # ---------------- RUN ----------------
-print("Madara URL Uploader Bot started... 🚀 FULL-SIZE STREAMING + BROADCAST Mode ✅")
+print("Rin URL Uploader Bot started... 🚀 FULL-SIZE STREAMING + BROADCAST Mode ✅")
 app.run()
