@@ -4,7 +4,7 @@ class Config:
     # Telegram API
     API_ID = int(os.getenv("API_ID", "22201946"))         # your api_id from my.telegram.org
     API_HASH = os.getenv("API_HASH", "f4e7f0de47a09671133ecafa6920ebbe")   # your api_hash from my.telegram.org
-    BOT_TOKEN = os.getenv("BOT_TOKEN", "8458120677:AAE-_r9xzg3Tg1PchwlwUmMPcBUUqmOP1MM") # your bot token from BotFather
+    BOT_TOKEN = os.getenv("BOT_TOKEN", "8275918271:AAG9tIjh-5mWRvrz2lKMhMQH8NHdBz4_IgE") # your bot token from BotFather
 
     # MongoDB
     MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://drdoom2003p:drdoom2003p@cluster0.fnhjrtn.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")  # MongoDB URI
