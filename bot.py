@@ -4,7 +4,7 @@ import time
 import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.errors import UserNotParticipant, FloodWait
+from pyrogram.errors import UserNotParticipant, PeerIdInvalid, FloodWait
 from pymongo import MongoClient
 from config import Config
 
@@ -40,35 +40,35 @@ async def progress_bar(current, total, start, stage):
 async def is_subscribed(user_id):
     try:
         channel = Config.SUPPORT_CHANNEL
-        if str(channel).startswith("@"):
-            channel = channel[1:]  # remove @
+        if channel.startswith("@"):
+            channel = channel[1:]
         member = await app.get_chat_member(channel, user_id)
-        # Accept member, admin, creator, restricted
-        if member.status in ["member", "administrator", "creator", "restricted"]:
+        if member.status in ["member", "administrator", "creator"]:
             return True
+        return False
     except UserNotParticipant:
+        return False
+    except PeerIdInvalid:
         return False
     except Exception as e:
         print(f"Subscription check error: {e}")
         return False
-    return False
 
 # -------- FORCE SUBSCRIBE PROMPT ----------
 async def send_force_subscribe_prompt(message):
     channel = Config.SUPPORT_CHANNEL
-    if str(channel).startswith("@"):
+    if channel.startswith("@"):
         channel = channel[1:]
 
     btn = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🚪 Join Now", url=f"https://t.me/{channel}"),
-            InlineKeyboardButton("✅ Verified", callback_data="verify_sub")
+            InlineKeyboardButton("🚪 Join Now", url=f"https://t.me/{channel}")
         ]
     ])
     await message.reply_text(
         "**⚠️ Attention!**\n\n"
         "You must join our official support channel to use this bot.\n\n"
-        "Press 🚪 Join Now to join, then click ✅ Verified to continue.",
+        "Join the channel and send /start again to continue.",
         reply_markup=btn
     )
 
@@ -102,20 +102,6 @@ async def start_cmd(client, message):
         "**⚡ Speed Beast Mode Activated ⚡**",
         reply_markup=btn
     )
-
-# -------- CALLBACK QUERY FOR VERIFIED BUTTON ----------
-@app.on_callback_query(filters.regex("verify_sub"))
-async def verify_subscription_cb(client, callback_query):
-    user_id = callback_query.from_user.id
-    await asyncio.sleep(2)
-    if await is_subscribed(user_id):
-        await callback_query.answer("✅ Verified! You can now use the bot.", show_alert=True)
-        await start_cmd(client, callback_query.message)
-    else:
-        await callback_query.answer(
-            "❌ You haven't joined the channel yet! Make sure you joined and try again.",
-            show_alert=True
-        )
 
 # -------- MULTI-CHUNK DOWNLOAD HANDLER ----------
 async def download_file(url, filepath, status):
