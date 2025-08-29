@@ -39,7 +39,7 @@ async def progress_bar(current, total, start, stage):
 # -------- FORCE SUBSCRIBE CHECK ----------
 async def is_subscribed(user_id):
     try:
-        channel = Config.SUPPORT_CHANNEL
+        channel = Config.FORCE_SUB_CHANNEL
         if channel.startswith("@"):
             channel = channel[1:]
         member = await app.get_chat_member(channel, user_id)
@@ -56,19 +56,20 @@ async def is_subscribed(user_id):
 
 # -------- FORCE SUBSCRIBE PROMPT ----------
 async def send_force_subscribe_prompt(message):
-    channel = Config.SUPPORT_CHANNEL
+    channel = Config.FORCE_SUB_CHANNEL
     if channel.startswith("@"):
         channel = channel[1:]
 
     btn = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🚪 Join Now", url=f"https://t.me/{channel}")
+            InlineKeyboardButton("🚪 Join Now", url=f"https://t.me/{channel}"),
+            InlineKeyboardButton("✅ Verified", callback_data="verify_sub")
         ]
     ])
     await message.reply_text(
         "**⚠️ Attention!**\n\n"
-        "You must join our official support channel to use this bot.\n\n"
-        "Join the channel and send /start again to continue.",
+        "You must join our official channel to use this bot.\n\n"
+        "👉 Click 🚪 Join Now, then press ✅ Verified after joining.",
         reply_markup=btn
     )
 
@@ -90,7 +91,7 @@ async def start_cmd(client, message):
         return
 
     btn = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 Support Channel", url=f"https://t.me/{Config.SUPPORT_CHANNEL[1:] if Config.SUPPORT_CHANNEL.startswith('@') else Config.SUPPORT_CHANNEL}")],
+        [InlineKeyboardButton("📢 Support Channel", url=f"https://t.me/{Config.SUPPORT_CHANNEL}")],
         [InlineKeyboardButton("👤 Owner", url=f"https://t.me/{Config.OWNER_USERNAME}")]
     ])
     await message.reply_text(
@@ -102,6 +103,16 @@ async def start_cmd(client, message):
         "**⚡ Speed Beast Mode Activated ⚡**",
         reply_markup=btn
     )
+
+# -------- VERIFY CALLBACK ----------
+@app.on_callback_query(filters.regex("verify_sub"))
+async def verify_subscription_cb(client, callback_query):
+    user_id = callback_query.from_user.id
+    if await is_subscribed(user_id):
+        await callback_query.answer("✅ Verified! You can now use the bot.", show_alert=True)
+        await start_cmd(client, callback_query.message)
+    else:
+        await callback_query.answer("❌ You haven't joined yet. Please join and try again.", show_alert=True)
 
 # -------- MULTI-CHUNK DOWNLOAD HANDLER ----------
 async def download_file(url, filepath, status):
@@ -192,50 +203,6 @@ async def url_handler(client, message):
     finally:
         if os.path.exists(filepath):
             os.remove(filepath)
-
-# -------- BROADCAST CMD ----------
-@app.on_message(filters.command("broadcast") & filters.user(OWNER_IDS))
-async def broadcast_handler(client, message):
-    if message.reply_to_message:
-        b_msg = message.reply_to_message
-    elif len(message.command) > 1:
-        b_msg = message.text.split(maxsplit=1)[1]
-    else:
-        await message.reply_text("⚠️ Usage:\nReply or /broadcast Your text")
-        return
-
-    sent, failed = 0, 0
-    users = users_col.find({}).sort("user_id", 1)
-    total = users_col.count_documents({})
-    status = await message.reply_text(f"📢 Broadcasting started...\n👥 Total Users: {total}")
-
-    for user in users:
-        uid = user["user_id"]
-        try:
-            if hasattr(b_msg, "photo") and b_msg.photo:
-                await app.send_photo(uid, b_msg.photo.file_id, caption=b_msg.caption or "")
-            elif hasattr(b_msg, "video") and b_msg.video:
-                await app.send_video(uid, b_msg.video.file_id, caption=b_msg.caption or "")
-            elif hasattr(b_msg, "document") and b_msg.document:
-                await app.send_document(uid, b_msg.document.file_id, caption=b_msg.caption or "")
-            elif isinstance(b_msg, str):
-                await app.send_message(uid, b_msg)
-            else:
-                continue
-
-            sent += 1
-            await asyncio.sleep(0.05)
-            if sent % 20 == 0:
-                await status.edit_text(
-                    f"📢 Broadcasting...\n👥 Total Users: {total}\n📩 Sent: {sent}\n⚠️ Failed: {failed}"
-                )
-        except Exception:
-            failed += 1
-            continue
-
-    await status.edit_text(
-        f"✅ Broadcast completed!\n\n👥 Total Users: {total}\n📩 Sent: {sent}\n⚠️ Failed: {failed}"
-    )
 
 # ---------------- RUN ----------------
 print("Madara URL Uploader Bot started... SUPER SPEED MODE ✅")
