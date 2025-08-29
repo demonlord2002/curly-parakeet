@@ -1,8 +1,11 @@
 import os
 import aiohttp
 import time
+import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.errors import UserNotParticipant
+from pymongo import MongoClient
 from config import Config
 
 # ---------------- INIT ----------------
@@ -12,6 +15,14 @@ app = Client(
     api_hash=Config.API_HASH,
     bot_token=Config.BOT_TOKEN
 )
+
+# ---------------- MONGO ----------------
+mongo = MongoClient(Config.MONGO_URI)
+db = mongo["madara_bot"]
+users_col = db["users"]
+
+# ---------------- OWNER ----------------
+OWNER_IDS = [Config.OWNER_ID]
 
 # -------- PROGRESS BAR ----------
 async def progress_bar(current, total, start, stage):
@@ -25,67 +36,145 @@ async def progress_bar(current, total, start, stage):
     eta = (total - current) / speed if speed != 0 else 0
     return f"{stage}:   {bar} {percent:.2f}% | {speed/1024/1024:.2f} MB/s | ETA: {int(eta)}s"
 
+# -------- FORCE SUBSCRIBE CHECK ----------
+async def is_subscribed(user_id):
+    try:
+        member = await app.get_chat_member(Config.SUPPORT_CHANNEL, user_id)
+        if member.status in ["member", "administrator", "creator"]:
+            return True
+    except UserNotParticipant:
+        return False
+    except Exception:
+        return False
+    return False
+
+# -------- FORCE SUBSCRIBE PROMPT ----------
+async def send_force_subscribe_prompt(message):
+    btn = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🚪 Join Now", url=f"https://t.me/{Config.SUPPORT_CHANNEL}"),
+            InlineKeyboardButton("✅ Verified", callback_data="verify_sub")
+        ]
+    ])
+    await message.reply_text(
+        "**⚠️ Attention!**\n\n"
+        "You must join our official support channel to use this bot.\n\n"
+        "Press 🚪 Join Now to join, then click ✅ Verified to continue.",
+        reply_markup=btn
+    )
+
 # -------- START CMD ----------
 @app.on_message(filters.command("start"))
 async def start_cmd(client, message):
+    user_id = message.from_user.id
+    first_name = message.from_user.first_name
+    username = message.from_user.username
+
+    users_col.update_one(
+        {"user_id": user_id},
+        {"$set": {"first_name": first_name, "username": username}},
+        upsert=True
+    )
+
+    if not await is_subscribed(user_id):
+        await send_force_subscribe_prompt(message)
+        return
+
     btn = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 Support Channel", url=Config.SUPPORT_CHANNEL)],
+        [InlineKeyboardButton("📢 Support Channel", url=f"https://t.me/{Config.SUPPORT_CHANNEL}")],
         [InlineKeyboardButton("👤 Owner", url=f"https://t.me/{Config.OWNER_USERNAME}")]
     ])
     await message.reply_text(
-        "**🔥 𝙈𝘼𝘿𝘼𝙍𝘼 𝙐𝙍𝙇 𝙐𝙋𝙇𝙊𝘼𝘿𝙀𝙍 🔥**\n\n"
-        "➤ Send me any **Direct Video URL** (mp4/mkv).\n"
-        "➤ I will **download + upload** it to Telegram.\n"
-        "➤ Only **.mp4 / .mkv** are accepted ⚡\n\n"
+        f"**🔥 MADARA URL UPLOADER 🔥**\n\n"
+        f"👋 Hello **{first_name}**!\n"
+        "➤ Send me any **Direct Video URL** (.mp4/.mkv)\n"
+        "➤ I will **download + upload** it at ⚡ high speed ⚡\n"
+        "➤ Only **.mp4 / .mkv** are accepted\n\n"
         "**⚡ Speed Beast Mode Activated ⚡**",
         reply_markup=btn
     )
 
-# -------- URL HANDLER ----------
+# -------- CALLBACK QUERY FOR VERIFIED BUTTON ----------
+@app.on_callback_query(filters.regex("verify_sub"))
+async def verify_subscription_cb(client, callback_query):
+    user_id = callback_query.from_user.id
+    if await is_subscribed(user_id):
+        await callback_query.answer("✅ Verified! You can now use the bot.", show_alert=True)
+        await start_cmd(client, callback_query.message)
+    else:
+        await callback_query.answer("❌ You haven't joined the channel yet!", show_alert=True)
+
+# -------- MULTI-CHUNK DOWNLOAD HANDLER ----------
+async def download_file(url, filepath, status):
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=40)) as session:
+        async with session.head(url) as resp:
+            total_size = int(resp.headers.get("Content-Length", 0))
+
+        chunk_size = 16 * 1024 * 1024  # 16MB per chunk
+        tasks = []
+        downloaded_data = [None] * ((total_size // chunk_size) + 1)
+        start_time = time.time()
+        last_update = start_time
+
+        async def download_chunk(idx, start, end):
+            nonlocal last_update
+            headers = {"Range": f"bytes={start}-{end}"}
+            async with session.get(url, headers=headers) as r:
+                data = await r.read()
+                downloaded_data[idx] = data
+                downloaded_bytes = sum(len(x) for x in downloaded_data if x)
+                if time.time() - last_update > 1.0:
+                    text = await progress_bar(downloaded_bytes, total_size, start_time, "📥 Downloading")
+                    try:
+                        await status.edit_text(text)
+                    except:
+                        pass
+                    last_update = time.time()
+
+        for i in range(0, total_size, chunk_size):
+            start = i
+            end = min(i + chunk_size - 1, total_size - 1)
+            idx = i // chunk_size
+            tasks.append(download_chunk(idx, start, end))
+
+        await asyncio.gather(*tasks)
+
+        # Write all chunks to file
+        with open(filepath, "wb") as f:
+            for chunk in downloaded_data:
+                f.write(chunk)
+
+# -------- URL HANDLER (SUPER FAST) ----------
 @app.on_message(filters.text & ~filters.command(["start"]))
 async def url_handler(client, message):
-    url = message.text.strip()
+    user_id = message.from_user.id
 
-    # Guess filename
+    if not await is_subscribed(user_id):
+        await send_force_subscribe_prompt(message)
+        return
+
+    url = message.text.strip()
     filename = url.split("/")[-1].split("?")[0]
     ext = os.path.splitext(filename)[-1].lower()
-
     if ext not in Config.ALLOWED_EXTENSIONS:
-        filename = filename + ".mkv"
-        ext = ".mkv"
+        filename += ".mkv"
 
     filepath = os.path.join("downloads", filename)
     os.makedirs("downloads", exist_ok=True)
-
     status = await message.reply_text("📥 Starting download...")
 
-    # -------- DOWNLOAD --------
     try:
-        start_time = time.time()
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                total_size = int(resp.headers.get("Content-Length", 0))
-                downloaded = 0
-                with open(filepath, "wb") as f:
-                    async for chunk in resp.content.iter_chunked(1024 * 1024):
-                        if chunk:
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            if time.time() - start_time > 2:
-                                text = await progress_bar(downloaded, total_size, start_time, "📥 Downloading")
-                                await status.edit_text(text)
-                                start_time = time.time()
+        await download_file(url, filepath, status)
 
         await status.edit_text("✅ Download completed. Starting upload...")
 
-        # -------- UPLOAD --------
         up_start = time.time()
         last_update = 0
 
         async def upload_progress(current, total):
             nonlocal last_update
             now = time.time()
-            if now - last_update >= 3 or current == total:  # update every 3s or at completion
+            if now - last_update >= 1 or current == total:
                 last_update = now
                 text = await progress_bar(current, total, up_start, "📤 Uploading")
                 try:
@@ -99,7 +188,7 @@ async def url_handler(client, message):
             file_name=filename,
             progress=upload_progress
         )
-        await status.edit_text("✅ Upload completed!")
+        await status.edit_text("✅ Upload completed! 🔥")
 
     except Exception as e:
         await status.edit_text(f"❌ Error: {e}")
@@ -108,6 +197,52 @@ async def url_handler(client, message):
         if os.path.exists(filepath):
             os.remove(filepath)
 
+# -------- BROADCAST CMD (SORTED USERS, FASTER) ----------
+@app.on_message(filters.command("broadcast") & filters.user(OWNER_IDS))
+async def broadcast_handler(client, message):
+    if message.reply_to_message:
+        b_msg = message.reply_to_message
+    elif len(message.command) > 1:
+        b_msg = message.text.split(maxsplit=1)[1]
+    else:
+        await message.reply_text("⚠️ Usage:\nReply or /broadcast Your text")
+        return
+
+    sent, failed = 0, 0
+    users = users_col.find({}).sort("user_id", 1)
+    total = users_col.count_documents({})
+    status = await message.reply_text(f"📢 Broadcasting started...\n👥 Total Users: {total}")
+
+    for user in users:
+        uid = user["user_id"]
+        try:
+            if hasattr(b_msg, "photo") and b_msg.photo:
+                await app.send_photo(uid, b_msg.photo.file_id, caption=b_msg.caption or "")
+            elif hasattr(b_msg, "video") and b_msg.video:
+                await app.send_video(uid, b_msg.video.file_id, caption=b_msg.caption or "")
+            elif hasattr(b_msg, "document") and b_msg.document:
+                await app.send_document(uid, b_msg.document.file_id, caption=b_msg.caption or "")
+            elif isinstance(b_msg, str):
+                await app.send_message(uid, b_msg)
+            else:
+                continue
+
+            sent += 1
+            await asyncio.sleep(0.05)
+
+            if sent % 20 == 0:
+                await status.edit_text(
+                    f"📢 Broadcasting...\n👥 Total Users: {total}\n📩 Sent: {sent}\n⚠️ Failed: {failed}"
+                )
+
+        except Exception:
+            failed += 1
+            continue
+
+    await status.edit_text(
+        f"✅ Broadcast completed!\n\n👥 Total Users: {total}\n📩 Sent: {sent}\n⚠️ Failed: {failed}"
+    )
+
 # ---------------- RUN ----------------
-print("Madara URL Uploader Bot started...")
+print("Madara URL Uploader Bot started... SUPER SPEED MODE ✅")
 app.run()
