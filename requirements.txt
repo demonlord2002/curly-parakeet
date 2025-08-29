@@ -1,4 +1,3 @@
-pyrogram==2.0.44
+pyrogram==2.0.106
 tgcrypto
-pymongo
-flask
+aiohttp
