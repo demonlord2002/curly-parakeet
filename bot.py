@@ -19,7 +19,7 @@ async def progress_bar(current, total, start, stage):
     diff = now - start
     percent = current * 100 / total if total != 0 else 0
     speed = current / diff if diff != 0 else 0
-    bar_length = 10
+    bar_length = 12
     filled = int(bar_length * percent / 100)
     bar = "▓" * filled + "░" * (bar_length - filled)
     eta = (total - current) / speed if speed != 0 else 0
@@ -80,12 +80,18 @@ async def url_handler(client, message):
 
         # -------- UPLOAD --------
         up_start = time.time()
+        last_update = 0
+
         async def upload_progress(current, total):
-            text = await progress_bar(current, total, up_start, "📤 Uploading")
-            try:
-                await status.edit_text(text)
-            except:
-                pass
+            nonlocal last_update
+            now = time.time()
+            if now - last_update >= 3 or current == total:  # update every 3s or at completion
+                last_update = now
+                text = await progress_bar(current, total, up_start, "📤 Uploading")
+                try:
+                    await status.edit_text(text)
+                except:
+                    pass
 
         await client.send_document(
             chat_id=message.chat.id,
