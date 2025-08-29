@@ -1,13 +1,14 @@
 {
   "name": "Madara URL Uploader Bot",
-  "description": "⚡ A fast URL uploader bot for Telegram with download/upload progress bar.",
+  "description": "⚡ Super-fast URL uploader bot for Telegram with multi-chunk download & upload progress.",
   "logo": "https://telegra.ph/file/191ebf041e3d2c8d74f36.jpg",
   "keywords": [
     "telegram",
     "url-uploader",
     "madara",
     "pyrogram",
-    "file-bot"
+    "file-bot",
+    "super-speed"
   ],
   "repository": "https://github.com/your-repo/madara-url-uploader",
   "website": "https://t.me/Fallen_Angels_Team",
@@ -23,6 +24,22 @@
     "BOT_TOKEN": {
       "description": "Bot token from @BotFather",
       "value": "your_bot_token"
+    },
+    "MONGO_URI": {
+      "description": "MongoDB URI (Atlas or local)",
+      "value": "mongodb://localhost:27017"
+    },
+    "OWNER_ID": {
+      "description": "Your Telegram ID (owner/admin)",
+      "value": "123456789"
+    },
+    "OWNER_USERNAME": {
+      "description": "Your Telegram username (without @, optional for buttons)",
+      "value": "YourUsername"
+    },
+    "SUPPORT_CHANNEL": {
+      "description": "Telegram username of your support/force-subscribe channel",
+      "value": "YourChannelUsername"
     }
   },
   "buildpacks": [
