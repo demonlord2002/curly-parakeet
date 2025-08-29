@@ -4,7 +4,7 @@ import time
 import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.errors import UserNotParticipant, PeerIdInvalid, FloodWait
+from pyrogram.errors import UserNotParticipant, FloodWait
 from pymongo import MongoClient
 from config import Config
 
@@ -37,39 +37,38 @@ async def progress_bar(current, total, start, stage):
     return f"{stage}:   {bar} {percent:.2f}% | {speed/1024/1024:.2f} MB/s | ETA: {int(eta)}s"
 
 # -------- FORCE SUBSCRIBE CHECK ----------
-async def is_subscribed(user_id):
+async def is_subscribed(user_id: int) -> bool:
+    """
+    Check if user is subscribed to FORCE_SUB_CHANNEL.
+    Works with both @username and channel ID (-100xxxx).
+    """
     try:
         channel = Config.FORCE_SUB_CHANNEL
-        if channel.startswith("@"):
-            channel = channel[1:]
+        # Pyrogram accepts @username or -100id directly
         member = await app.get_chat_member(channel, user_id)
-        if member.status in ["member", "administrator", "creator"]:
-            return True
-        return False
+        return member.status not in ["left", "kicked"]
     except UserNotParticipant:
         return False
-    except PeerIdInvalid:
-        return False
+    except FloodWait as e:
+        print(f"FloodWait: sleeping {e.value}s")
+        await asyncio.sleep(e.value)
+        return await is_subscribed(user_id)
     except Exception as e:
-        print(f"Subscription check error: {e}")
+        print(f"[is_subscribed] Error: {e}")
         return False
 
 # -------- FORCE SUBSCRIBE PROMPT ----------
 async def send_force_subscribe_prompt(message):
     channel = Config.FORCE_SUB_CHANNEL
-    if channel.startswith("@"):
-        channel = channel[1:]
-
     btn = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🚪 Join Now", url=f"https://t.me/{channel}"),
-            InlineKeyboardButton("✅ Verified", callback_data="verify_sub")
+            InlineKeyboardButton("🚪 Join Channel", url=f"https://t.me/{channel.replace('@','')}"),
+            InlineKeyboardButton("✅ Verify", callback_data="verify_sub")
         ]
     ])
     await message.reply_text(
-        "**⚠️ Attention!**\n\n"
-        "You must join our official channel to use this bot.\n\n"
-        "👉 Click 🚪 Join Now, then press ✅ Verified after joining.",
+        "⚡ **Join our Support Channel to unlock access!** ⚡\n\n"
+        "🔒 Your access is locked until you join ❤️🥷",
         reply_markup=btn
     )
 
@@ -91,7 +90,7 @@ async def start_cmd(client, message):
         return
 
     btn = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 Support Channel", url=f"https://t.me/{Config.SUPPORT_CHANNEL}")],
+        [InlineKeyboardButton("📢 Support Channel", url=f"https://t.me/{Config.SUPPORT_CHANNEL.replace('@','')}")],
         [InlineKeyboardButton("👤 Owner", url=f"https://t.me/{Config.OWNER_USERNAME}")]
     ])
     await message.reply_text(
@@ -109,10 +108,10 @@ async def start_cmd(client, message):
 async def verify_subscription_cb(client, callback_query):
     user_id = callback_query.from_user.id
     if await is_subscribed(user_id):
-        await callback_query.answer("✅ Verified! You can now use the bot.", show_alert=True)
+        await callback_query.message.edit_text("✅ Verified! Welcome to Madara Family ❤️")
         await start_cmd(client, callback_query.message)
     else:
-        await callback_query.answer("❌ You haven't joined yet. Please join and try again.", show_alert=True)
+        await callback_query.answer("❌ Not subscribed yet! Join first ⚡", show_alert=True)
 
 # -------- MULTI-CHUNK DOWNLOAD HANDLER ----------
 async def download_file(url, filepath, status):
