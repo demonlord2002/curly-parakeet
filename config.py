@@ -1,9 +1,9 @@
 import os
 
 class Config:
-    API_ID = int(os.getenv("API_ID", "12345"))  # get from my.telegram.org
-    API_HASH = os.getenv("API_HASH", "your_api_hash")
-    BOT_TOKEN = os.getenv("BOT_TOKEN", "your_bot_token")
+    API_ID = int(os.getenv("API_ID", "22201946"))  # get from my.telegram.org
+    API_HASH = os.getenv("API_HASH", "f4e7f0de47a09671133ecafa6920ebbe")
+    BOT_TOKEN = os.getenv("BOT_TOKEN", "8458120677:AAE-_r9xzg3Tg1PchwlwUmMPcBUUqmOP1MM")
 
     # Allowed extensions
     ALLOWED_EXTENSIONS = [".mkv", ".mp4"]
