@@ -81,9 +81,11 @@ async def start_cmd(client, message):
         return
 
     btn = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 Support Channel", url=f"https://t.me/{Config.SUPPORT_CHANNEL.replace('@','')}")],
-        [InlineKeyboardButton("👤 Owner", url=f"https://t.me/{Config.OWNER_USERNAME}")]
-    ])
+    [
+        InlineKeyboardButton("💜 **Owner**", url=f"https://t.me/{Config.OWNER_USERNAME}"),
+        InlineKeyboardButton("🌸 **Support**", url=f"https://t.me/{Config.SUPPORT_CHANNEL.replace('@','')}")
+    ]
+])
     await message.reply_text(
         f"🌸✨ **Rin URL Uploader** ✨🌸\n\n"
         f"👋 Hey **{message.from_user.first_name}**, Rin is on duty! 🥷💖\n"
