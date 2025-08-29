@@ -215,7 +215,7 @@ async def cancel_handler(client, message):
         await message.reply_text("⚠️ No active download/upload to cancel!")
 
 # ---------------- BROADCAST ----------------
-@app.on_message(filters.command("broadcast") & filters.user(OWNER_IDS))
+@app.on_message(filters.command("broadcast") & filters.user(OWNER_ID))
 async def broadcast_handler(client, message):
     if message.reply_to_message:
         b_msg = message.reply_to_message
