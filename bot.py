@@ -1,7 +1,7 @@
 import os
 import aiohttp
-import time
 import asyncio
+import time
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant, FloodWait
@@ -23,6 +23,10 @@ users_col = db["users"]
 
 # ---------------- OWNER ----------------
 OWNER_IDS = [Config.OWNER_ID]
+
+# ---------------- COOLDOWN ----------------
+user_cooldowns = {}
+COOLDOWN_TIME = 120  # 2 minutes cooldown
 
 # -------- PROGRESS BAR ----------
 async def progress_bar(current, total, start, stage):
@@ -72,7 +76,6 @@ async def start_cmd(client, message):
         {"$set": {"first_name": message.from_user.first_name, "username": message.from_user.username}},
         upsert=True
     )
-
     if not await is_subscribed(user_id):
         await send_force_subscribe_prompt(message)
         return
@@ -98,32 +101,48 @@ async def verify_subscription_cb(client, callback_query):
     else:
         await callback_query.answer("❌ Not subscribed yet! Join first ⚡", show_alert=True)
 
-# -------- SAFE FAST DOWNLOADER ----------
-async def download_file(url, filepath, status):
-    """
-    Safe high-speed streaming download.
-    Writes directly to file, no chunk loss.
-    """
+# -------- PARALLEL CHUNK DOWNLOAD ---------
+async def download_file(url, filepath, status, max_connections=8):
+    async def fetch_chunk(session, start, end, idx, results):
+        headers = {"Range": f"bytes={start}-{end}"}
+        async with session.get(url, headers=headers) as resp:
+            results[idx] = await resp.read()
+            downloaded_bytes = sum(len(c) for c in results if c)
+            text = await progress_bar(downloaded_bytes, total_size, start_time, "📥 Downloading")
+            try: await status.edit_text(text)
+            except: pass
+
     start_time = time.time()
-    downloaded = 0
-    chunk_size = 4 * 1024 * 1024  # 4MB chunks
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=max_connections)) as session:
+        async with session.head(url) as resp:
             total_size = int(resp.headers.get("Content-Length", 0))
-            with open(filepath, "wb") as f:
-                async for chunk in resp.content.iter_chunked(chunk_size):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        text = await progress_bar(downloaded, total_size, start_time, "📥 Downloading")
-                        try: await status.edit_text(text)
-                        except: pass
+        chunk_size = total_size // max_connections + 1
+        results = [b""] * max_connections
+        tasks = []
+        for i in range(max_connections):
+            start = i * chunk_size
+            end = min(start + chunk_size - 1, total_size - 1)
+            tasks.append(fetch_chunk(session, start, end, i, results))
+        await asyncio.gather(*tasks)
 
-# -------- URL HANDLER ----------
+        # Write all chunks sequentially
+        with open(filepath, "wb") as f:
+            for chunk in results:
+                f.write(chunk)
+
+# -------- URL HANDLER WITH COOLDOWN ----------
 @app.on_message(filters.text & ~filters.command(["start"]))
 async def url_handler(client, message):
     user_id = message.from_user.id
+
+    # Owner bypass cooldown
+    if user_id not in OWNER_IDS:
+        last_time = user_cooldowns.get(user_id, 0)
+        if time.time() - last_time < COOLDOWN_TIME:
+            await message.reply_text(f"⏳ Please wait {int(COOLDOWN_TIME - (time.time() - last_time))}s before next upload!")
+            return
+        user_cooldowns[user_id] = time.time()
+
     if not await is_subscribed(user_id):
         await send_force_subscribe_prompt(message)
         return
@@ -138,12 +157,13 @@ async def url_handler(client, message):
     status = await message.reply_text("📥 Starting download...")
 
     try:
+        # Download
         await download_file(url, filepath, status)
         await status.edit_text("✅ Download completed. Starting upload...")
 
+        # Upload
         up_start = time.time()
         last_update = 0
-
         async def upload_progress(current, total):
             nonlocal last_update
             now = time.time()
@@ -168,5 +188,5 @@ async def url_handler(client, message):
             os.remove(filepath)
 
 # ---------------- RUN ----------------
-print("Madara URL Uploader Bot started... 🚀 FULL-SIZE High-Speed Mode ✅")
+print("Madara URL Uploader Bot started... 🚀 FULL-SIZE Multi-Chunk High-Speed Mode ✅")
 app.run()
