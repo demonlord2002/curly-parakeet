@@ -54,9 +54,11 @@ async def is_subscribed(user_id):
 
 # -------- FORCE SUBSCRIBE PROMPT ----------
 async def send_force_subscribe_prompt(message):
+    # Use plain username without '@' for t.me link
     channel = Config.SUPPORT_CHANNEL
-    if not str(channel).startswith("@"):
-        channel = "@" + str(channel)
+    if str(channel).startswith("@"):
+        channel = channel[1:]  # remove @ if exists
+
     btn = InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🚪 Join Now", url=f"https://t.me/{channel}"),
