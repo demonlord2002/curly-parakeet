@@ -105,7 +105,8 @@ async def verify_subscription_cb(client, callback_query):
 async def download_file(url, filepath, status):
     start_time = time.time()
     downloaded = 0
-    chunk_size = 8 * 1024 * 1024  # 8 MB chunks for decent speed
+    chunk_size = 16 * 1024 * 1024  # 16 MB chunks for better speed
+    last_update = 0
 
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
@@ -115,9 +116,14 @@ async def download_file(url, filepath, status):
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
-                        text = await progress_bar(downloaded, total_size, start_time, "📥 Downloading")
-                        try: await status.edit_text(text)
-                        except: pass
+                        # Update progress every 2 seconds
+                        if time.time() - last_update > 2 or downloaded == total_size:
+                            last_update = time.time()
+                            text = await progress_bar(downloaded, total_size, start_time, "📥 Downloading")
+                            try: 
+                                await status.edit_text(text)
+                            except: 
+                                pass
 
 # -------- URL HANDLER WITH COOLDOWN ----------
 @app.on_message(filters.text & ~filters.command(["start"]))
@@ -146,7 +152,7 @@ async def url_handler(client, message):
     status = await message.reply_text("📥 Starting download...")
 
     try:
-        # Download safely full file
+        # Download
         await download_file(url, filepath, status)
         await status.edit_text("✅ Download completed. Starting upload...")
 
@@ -156,7 +162,7 @@ async def url_handler(client, message):
         async def upload_progress(current, total):
             nonlocal last_update
             now = time.time()
-            if now - last_update >= 1 or current == total:
+            if now - last_update >= 2 or current == total:
                 last_update = now
                 text = await progress_bar(current, total, up_start, "📤 Uploading")
                 try: await status.edit_text(text)
