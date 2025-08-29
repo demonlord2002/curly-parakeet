@@ -39,7 +39,7 @@
     },
     "SUPPORT_CHANNEL": {
       "description": "Telegram username of your support/force-subscribe channel",
-      "value": "Fallen_Angels_Team"
+      "value": "@Fallen_Angels_Team"
     }
   },
   "buildpacks": [
