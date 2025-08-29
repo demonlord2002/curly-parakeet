@@ -4,7 +4,7 @@ import time
 import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.errors import UserNotParticipant
+from pyrogram.errors import UserNotParticipant, FloodWait
 from pymongo import MongoClient
 from config import Config
 
@@ -39,20 +39,27 @@ async def progress_bar(current, total, start, stage):
 # -------- FORCE SUBSCRIBE CHECK ----------
 async def is_subscribed(user_id):
     try:
-        member = await app.get_chat_member(Config.SUPPORT_CHANNEL, user_id)
+        channel = Config.SUPPORT_CHANNEL
+        if isinstance(channel, str) and not str(channel).startswith("@"):
+            channel = "@" + str(channel)
+        member = await app.get_chat_member(channel, user_id)
         if member.status in ["member", "administrator", "creator"]:
             return True
     except UserNotParticipant:
         return False
-    except Exception:
+    except Exception as e:
+        print(f"Subscription check error: {e}")
         return False
     return False
 
 # -------- FORCE SUBSCRIBE PROMPT ----------
 async def send_force_subscribe_prompt(message):
+    channel = Config.SUPPORT_CHANNEL
+    if not str(channel).startswith("@"):
+        channel = "@" + str(channel)
     btn = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🚪 Join Now", url=f"https://t.me/{Config.SUPPORT_CHANNEL}"),
+            InlineKeyboardButton("🚪 Join Now", url=f"https://t.me/{channel}"),
             InlineKeyboardButton("✅ Verified", callback_data="verify_sub")
         ]
     ])
@@ -98,11 +105,16 @@ async def start_cmd(client, message):
 @app.on_callback_query(filters.regex("verify_sub"))
 async def verify_subscription_cb(client, callback_query):
     user_id = callback_query.from_user.id
+    # wait a bit to ensure Telegram updates new member join
+    await asyncio.sleep(2)
     if await is_subscribed(user_id):
         await callback_query.answer("✅ Verified! You can now use the bot.", show_alert=True)
         await start_cmd(client, callback_query.message)
     else:
-        await callback_query.answer("❌ You haven't joined the channel yet!", show_alert=True)
+        await callback_query.answer(
+            "❌ You haven't joined the channel yet! Make sure you joined and try again.",
+            show_alert=True
+        )
 
 # -------- MULTI-CHUNK DOWNLOAD HANDLER ----------
 async def download_file(url, filepath, status):
@@ -139,7 +151,6 @@ async def download_file(url, filepath, status):
 
         await asyncio.gather(*tasks)
 
-        # Write all chunks to file
         with open(filepath, "wb") as f:
             for chunk in downloaded_data:
                 f.write(chunk)
@@ -148,7 +159,6 @@ async def download_file(url, filepath, status):
 @app.on_message(filters.text & ~filters.command(["start"]))
 async def url_handler(client, message):
     user_id = message.from_user.id
-
     if not await is_subscribed(user_id):
         await send_force_subscribe_prompt(message)
         return
@@ -165,7 +175,6 @@ async def url_handler(client, message):
 
     try:
         await download_file(url, filepath, status)
-
         await status.edit_text("✅ Download completed. Starting upload...")
 
         up_start = time.time()
@@ -197,7 +206,7 @@ async def url_handler(client, message):
         if os.path.exists(filepath):
             os.remove(filepath)
 
-# -------- BROADCAST CMD (SORTED USERS, FASTER) ----------
+# -------- BROADCAST CMD ----------
 @app.on_message(filters.command("broadcast") & filters.user(OWNER_IDS))
 async def broadcast_handler(client, message):
     if message.reply_to_message:
@@ -229,12 +238,10 @@ async def broadcast_handler(client, message):
 
             sent += 1
             await asyncio.sleep(0.05)
-
             if sent % 20 == 0:
                 await status.edit_text(
                     f"📢 Broadcasting...\n👥 Total Users: {total}\n📩 Sent: {sent}\n⚠️ Failed: {failed}"
                 )
-
         except Exception:
             failed += 1
             continue
