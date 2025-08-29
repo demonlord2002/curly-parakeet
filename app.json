@@ -10,7 +10,7 @@
     "file-bot",
     "super-speed"
   ],
-  "repository": "https://github.com/your-repo/madara-url-uploader",
+  "repository": "https://github.com/demonlord2002/curly-parakeet",
   "website": "https://t.me/Fallen_Angels_Team",
   "env": {
     "API_ID": {
@@ -46,5 +46,15 @@
     {
       "url": "heroku/python"
     }
-  ]
+  ],
+  "formation": {
+    "worker": {
+      "quantity": 1,
+      "size": "Basic"
+    }
+  },
+  "addons": [],
+  "scripts": {
+    "postdeploy": "echo '✅ Madara File Sharing Bot deployed successfully!'"
+  }
 }
