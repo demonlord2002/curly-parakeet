@@ -2,6 +2,7 @@ import os
 import time
 import logging
 import threading
+import asyncio
 from datetime import datetime
 
 from flask import Flask, redirect, abort
@@ -36,6 +37,7 @@ app = Client(
     api_id=config.API_ID,
     api_hash=config.API_HASH,
     bot_token=config.BOT_TOKEN,
+    in_memory=True  # prevents session mismatch errors
 )
 
 # Flask App
@@ -51,15 +53,21 @@ def direct_download(file_id):
     if not file_doc:
         return abort(404, "File not found")
 
-    try:
-        # Get a direct download URL from Telegram
-        tg_file = app.get_messages(file_doc["uploader_id"], file_doc["tg_file_id"])
-        file_path = app.get_file(file_doc["tg_file_id"])
-        file_url = f"https://api.telegram.org/file/bot{config.BOT_TOKEN}/{file_path.file_path}"
-        return redirect(file_url)
-    except Exception as e:
-        logger.exception("Direct download failed")
+    async def get_url():
+        try:
+            file_path = await app.get_file(file_doc["tg_file_id"])
+            return f"https://api.telegram.org/file/bot{config.BOT_TOKEN}/{file_path.file_path}"
+        except Exception as e:
+            logger.exception("Direct download failed")
+            return None
+
+    loop = asyncio.get_event_loop()
+    file_url = loop.run_until_complete(get_url())
+
+    if not file_url:
         return abort(500, "Download failed")
+
+    return redirect(file_url)
 
 def run_flask():
     port = int(os.environ.get("PORT", 5000))
@@ -75,7 +83,10 @@ def build_share_link(file_id_int: int) -> str:
 # /start
 @app.on_message(filters.command("start") & filters.private)
 async def start_handler(client, message):
-    await message.reply_text("👋 Send me a file, I'll give you a direct download link!")
+    await message.reply_text(
+        "👋 Send me a file, I'll give you a **direct download link**!\n\n"
+        "📂 Any file you send will be stored permanently in the bot database."
+    )
 
 # Save files
 @app.on_message(filters.private & (filters.document | filters.video | filters.photo))
@@ -120,8 +131,10 @@ async def save_file(client, message):
 
     share_link = build_share_link(file_id_int)
     await message.reply_text(
-        f"✅ File saved!\n\n📂 ID: `{file_id_int}`\n🔗 Direct Link: {share_link}"
+        f"✅ File saved!\n\n📂 **ID:** `{file_id_int}`\n"
+        f"🔗 **Direct Link:** {share_link}"
     )
+
 
 if __name__ == "__main__":
     # Run Flask in a separate thread
