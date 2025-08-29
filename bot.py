@@ -7,21 +7,28 @@ from datetime import datetime
 
 from flask import Flask, redirect, abort
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pymongo import MongoClient, ReturnDocument
 
 import config
 
-logging.basicConfig(level=logging.INFO)
+# =========================================================
+# Logging Setup
+# =========================================================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - [%(levelname)s] - %(message)s",
+)
 logger = logging.getLogger(__name__)
 
+# =========================================================
 # MongoDB Setup
+# =========================================================
 mongo = MongoClient(config.MONGO_URI)
 db = mongo["file_share_bot"]
 files_col = db["files"]
 counters_col = db["counters"]
 
-# Generate incremental file_id
+# Incremental file_id
 def next_file_id():
     doc = counters_col.find_one_and_update(
         {"_id": "fileid"},
@@ -31,21 +38,25 @@ def next_file_id():
     )
     return int(doc["seq"])
 
+# =========================================================
 # Pyrogram Client
+# =========================================================
 app = Client(
     "file_share_bot",
     api_id=config.API_ID,
     api_hash=config.API_HASH,
     bot_token=config.BOT_TOKEN,
-    in_memory=True  # prevents session mismatch errors
+    in_memory=True,   # Prevents session mismatch on Heroku
 )
 
+# =========================================================
 # Flask App
+# =========================================================
 flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def home():
-    return "🚀 File Share Bot is running!"
+    return "🚀 File Share Bot is running on Heroku!"
 
 @flask_app.route("/d/<int:file_id>")
 def direct_download(file_id):
@@ -57,12 +68,14 @@ def direct_download(file_id):
         try:
             file_path = await app.get_file(file_doc["tg_file_id"])
             return f"https://api.telegram.org/file/bot{config.BOT_TOKEN}/{file_path.file_path}"
-        except Exception as e:
+        except Exception:
             logger.exception("Direct download failed")
             return None
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     file_url = loop.run_until_complete(get_url())
+    loop.close()
 
     if not file_url:
         return abort(500, "Download failed")
@@ -73,22 +86,25 @@ def run_flask():
     port = int(os.environ.get("PORT", 5000))
     flask_app.run(host="0.0.0.0", port=port)
 
-# Build share link (browser download link)
+# =========================================================
+# Helpers
+# =========================================================
 def build_share_link(file_id_int: int) -> str:
     heroku_url = os.environ.get("HEROKU_APP_URL", "").rstrip("/")
     if not heroku_url:
-        return f"https://t.me/{config.BOT_USERNAME}?start=file_{file_id_int}"  # fallback
+        return f"https://t.me/{config.BOT_USERNAME}?start=file_{file_id_int}"
     return f"{heroku_url}/d/{file_id_int}"
 
-# /start
+# =========================================================
+# Handlers
+# =========================================================
 @app.on_message(filters.command("start") & filters.private)
 async def start_handler(client, message):
     await message.reply_text(
         "👋 Send me a file, I'll give you a **direct download link**!\n\n"
-        "📂 Any file you send will be stored permanently in the bot database."
+        "📂 Files you send will be stored permanently in the database."
     )
 
-# Save files
 @app.on_message(filters.private & (filters.document | filters.video | filters.photo))
 async def save_file(client, message):
     tg_file_id, ftype, fname, fsize = None, "document", None, 0
@@ -113,7 +129,9 @@ async def save_file(client, message):
         return
 
     if fsize and fsize > config.MAX_FILE_SIZE_MB * 1024 * 1024:
-        await message.reply_text(f"⚠️ File too large. Max {config.MAX_FILE_SIZE_MB} MB allowed.")
+        await message.reply_text(
+            f"⚠️ File too large. Max {config.MAX_FILE_SIZE_MB} MB allowed."
+        )
         return
 
     file_id_int = next_file_id()
@@ -135,8 +153,23 @@ async def save_file(client, message):
         f"🔗 **Direct Link:** {share_link}"
     )
 
-
+# =========================================================
+# Main Entry
+# =========================================================
 if __name__ == "__main__":
-    # Run Flask in a separate thread
+    # Sync timezone (Heroku sometimes drifts)
+    os.environ["TZ"] = "UTC"
+    try:
+        time.tzset()
+    except Exception:
+        pass
+
+    # Run Flask + Bot
     threading.Thread(target=run_flask).start()
-    app.run()
+
+    while True:
+        try:
+            app.run()
+        except Exception as e:
+            logger.error(f"Bot crashed: {e}, retrying in 5s...")
+            time.sleep(5)
