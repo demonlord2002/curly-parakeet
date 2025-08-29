@@ -81,20 +81,28 @@ async def start_cmd(client, message):
         return
 
     btn = InlineKeyboardMarkup([
-    [
-        InlineKeyboardButton("💜 **Owner**", url=f"https://t.me/{Config.OWNER_USERNAME}"),
-        InlineKeyboardButton("🌸 **Support**", url=f"https://t.me/{Config.SUPPORT_CHANNEL.replace('@','')}")
-    ]
-])
-    await message.reply_text(
-        f"🌸✨ **Rin URL Uploader** ✨🌸\n\n"
-        f"👋 Hey **{message.from_user.first_name}**, Rin is on duty! 🥷💖\n"
-        "▶️ Send any **Direct Video URL** (.mp4/.mkv)\n"
-        "⚡ I will **swiftly download & upload** it at ⚡ high speed ⚡\n"
-        "**💫 Full-size transfers guaranteed 💫**\n"
-        "🌿 Rin will take care of your files like a true ninja! 🌿",
+        [
+            InlineKeyboardButton("💜 Owner", url=f"https://t.me/{Config.OWNER_USERNAME}"),
+            InlineKeyboardButton("🌸 Support", url=f"https://t.me/{Config.SUPPORT_CHANNEL.replace('@','')}")
+        ]
+    ])
+
+    start_image_url = "YOUR_START_IMAGE_URL_HERE"  # <-- Replace this with your image URL
+
+    await message.reply_photo(
+        photo=start_image_url,
+        caption=(
+            f"💜🌸 **Rin's Ninja Uploader** 🌸💜\n\n"
+            f"👋 Hey **{message.from_user.first_name}**! Rin’s on duty! 🥷✨\n"
+            "🌿 I’ll guard your files like a true ninja!\n"
+            "▶️ Send me any **Direct Video URL** (.mp4/.mkv) ⬇️\n"
+            "⚡ I’ll **swiftly download & upload** it at lightning speed ⚡\n"
+            "💫 **Full-size transfers safely delivered!** 💫\n"
+            "🌸 Trust Rin, your files are in ninja hands! 🌸"
+        ),
         reply_markup=btn
     )
+
 
 # -------- VERIFY CALLBACK ----------
 @app.on_callback_query(filters.regex("verify_sub"))
