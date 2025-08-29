@@ -39,11 +39,11 @@
     },
     "SUPPORT_CHANNEL": {
       "description": "Telegram username of your support/info channel",
-      "value": "Fallen_Angels_Team"
+      "value": "The_Architect_II"
     },
     "FORCE_SUB_CHANNEL": {
       "description": "Telegram username of channel users must join to use the bot",
-      "value": "Fallen_Angels_Team"
+      "value": "The_Architect_II"
     }
   },
   "buildpacks": [
