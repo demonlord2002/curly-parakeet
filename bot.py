@@ -215,14 +215,16 @@ async def cancel_handler(client, message):
         await message.reply_text("⚠️ No active download/upload to cancel!")
 
 # ---------------- BROADCAST ----------------
-@app.on_message(filters.command("broadcast") & filters.user(OWNER_ID))
+@app.on_message(filters.command("broadcast") & filters.user(Config.OWNER_ID))
 async def broadcast_handler(client, message):
     if message.reply_to_message:
         b_msg = message.reply_to_message
     elif len(message.command) > 1:
         b_msg = message.text.split(maxsplit=1)[1]
     else:
-        await message.reply_text("⚠️ Usage:\nReply to a message with /broadcast\nOr use: /broadcast Your text")
+        await message.reply_text(
+            "⚠️ Usage:\nReply to a message with /broadcast\nOr use: /broadcast Your text"
+        )
         return
 
     sent, failed = 0, 0
@@ -257,6 +259,7 @@ async def broadcast_handler(client, message):
         f"📩 Sent: {sent}\n"
         f"⚠️ Failed: {failed}"
     )
+
 
 # ---------------- RUN ----------------
 print("Rin URL Uploader Bot started... 🚀 FULL-SIZE STREAMING + BROADCAST + CANCEL Mode ✅")
