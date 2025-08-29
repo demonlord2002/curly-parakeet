@@ -14,7 +14,7 @@ class Config:
     OWNER_USERNAME = os.getenv("OWNER_USERNAME", "YourUsername")  # Optional for buttons
 
     # Support / Force Subscribe Channel
-    SUPPORT_CHANNEL = os.getenv("SUPPORT_CHANNEL", "YourChannelUsername") # e.g., madara_support
+    SUPPORT_CHANNEL = "@Fallen_Angels_Team" # e.g., madara_support
 
     # Allowed file extensions
     ALLOWED_EXTENSIONS = [".mp4", ".mkv"]
