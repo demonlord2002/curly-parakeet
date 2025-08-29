@@ -23,7 +23,7 @@
     },
     "BOT_TOKEN": {
       "description": "Bot token from @BotFather",
-      "value": "8458120677:AAE-_r9xzg3Tg1PchwlwUmMPcBUUqmOP1MM"
+      "value": "8275918271:AAG9tIjh-5mWRvrz2lKMhMQH8NHdBz4_IgE"
     },
     "MONGO_URI": {
       "description": "MongoDB URI (Atlas or local)",
