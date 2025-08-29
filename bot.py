@@ -92,13 +92,9 @@ async def start_cmd(client, message):
     await message.reply_photo(
         photo=start_image_url,
         caption=(
-            f"💜🌸 **Rin's Ninja Uploader** 🌸💜\n\n"
-            f"👋 Hey **{message.from_user.first_name}**! Rin’s on duty! 🥷✨\n"
-            "🌿 I’ll guard your files like a true ninja!\n"
-            "▶️ Send me any **Direct Video URL** (.mp4/.mkv) ⬇️\n"
-            "⚡ I’ll **swiftly download & upload** it at lightning speed ⚡\n"
-            "💫 **Full-size transfers safely delivered!** 💫\n"
-            "🌸 Trust Rin, your files are in ninja hands! 🌸"
+            f"💜 **Rin's Ninja Uploader** 💜\n\n"
+            f"👋 Hello **{message.from_user.first_name}**! Send a **Direct Video URL** and Rin will handle it swiftly! ⚡\n\n"
+            f"💫 **Full-size uploads safely delivered!** 💫"
         ),
         reply_markup=btn
     )
