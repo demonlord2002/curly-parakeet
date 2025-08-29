@@ -101,34 +101,23 @@ async def verify_subscription_cb(client, callback_query):
     else:
         await callback_query.answer("❌ Not subscribed yet! Join first ⚡", show_alert=True)
 
-# -------- PARALLEL CHUNK DOWNLOAD ---------
-async def download_file(url, filepath, status, max_connections=8):
-    async def fetch_chunk(session, start, end, idx, results):
-        headers = {"Range": f"bytes={start}-{end}"}
-        async with session.get(url, headers=headers) as resp:
-            results[idx] = await resp.read()
-            downloaded_bytes = sum(len(c) for c in results if c)
-            text = await progress_bar(downloaded_bytes, total_size, start_time, "📥 Downloading")
-            try: await status.edit_text(text)
-            except: pass
-
+# -------- SAFE STREAMING DOWNLOADER ---------
+async def download_file(url, filepath, status):
     start_time = time.time()
-    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=max_connections)) as session:
-        async with session.head(url) as resp:
-            total_size = int(resp.headers.get("Content-Length", 0))
-        chunk_size = total_size // max_connections + 1
-        results = [b""] * max_connections
-        tasks = []
-        for i in range(max_connections):
-            start = i * chunk_size
-            end = min(start + chunk_size - 1, total_size - 1)
-            tasks.append(fetch_chunk(session, start, end, i, results))
-        await asyncio.gather(*tasks)
+    downloaded = 0
+    chunk_size = 8 * 1024 * 1024  # 8 MB chunks for decent speed
 
-        # Write all chunks sequentially
-        with open(filepath, "wb") as f:
-            for chunk in results:
-                f.write(chunk)
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            total_size = int(resp.headers.get("Content-Length", 0))
+            with open(filepath, "wb") as f:
+                async for chunk in resp.content.iter_chunked(chunk_size):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        text = await progress_bar(downloaded, total_size, start_time, "📥 Downloading")
+                        try: await status.edit_text(text)
+                        except: pass
 
 # -------- URL HANDLER WITH COOLDOWN ----------
 @app.on_message(filters.text & ~filters.command(["start"]))
@@ -157,11 +146,11 @@ async def url_handler(client, message):
     status = await message.reply_text("📥 Starting download...")
 
     try:
-        # Download
+        # Download safely full file
         await download_file(url, filepath, status)
         await status.edit_text("✅ Download completed. Starting upload...")
 
-        # Upload
+        # Upload with progress
         up_start = time.time()
         last_update = 0
         async def upload_progress(current, total):
@@ -188,5 +177,5 @@ async def url_handler(client, message):
             os.remove(filepath)
 
 # ---------------- RUN ----------------
-print("Madara URL Uploader Bot started... 🚀 FULL-SIZE Multi-Chunk High-Speed Mode ✅")
+print("Madara URL Uploader Bot started... 🚀 FULL-SIZE STREAMING High-Speed Mode ✅")
 app.run()
