@@ -85,10 +85,12 @@ async def start_cmd(client, message):
         [InlineKeyboardButton("👤 Owner", url=f"https://t.me/{Config.OWNER_USERNAME}")]
     ])
     await message.reply_text(
-        f"**🔥 MADARA URL UPLOADER 🔥**\n\n👋 Hello **{message.from_user.first_name}**!\n"
-        "➤ Send any **Direct Video URL** (.mp4/.mkv)\n"
-        "➤ I will **download + upload** it at ⚡ high speed ⚡\n"
-        "**⚡ Speed Beast Mode Activated ⚡**",
+        f"🌸✨ **Rin URL Uploader** ✨🌸\n\n"
+        f"👋 Hey **{message.from_user.first_name}**, Rin is on duty! 🥷💖\n"
+        "▶️ Send any **Direct Video URL** (.mp4/.mkv)\n"
+        "⚡ I will **swiftly download & upload** it at ⚡ high speed ⚡\n"
+        "**💫 Full-size transfers guaranteed 💫**\n"
+        "🌿 Rin will take care of your files like a true ninja! 🌿",
         reply_markup=btn
     )
 
@@ -96,7 +98,7 @@ async def start_cmd(client, message):
 @app.on_callback_query(filters.regex("verify_sub"))
 async def verify_subscription_cb(client, callback_query):
     if await is_subscribed(callback_query.from_user.id):
-        await callback_query.message.edit_text("✅ Verified! Welcome to Madara Family ❤️")
+        await callback_query.message.edit_text("✅ Verified! Welcome to Rin Family ❤️")
         await start_cmd(client, callback_query.message)
     else:
         await callback_query.answer("❌ Not subscribed yet! Join first ⚡", show_alert=True)
