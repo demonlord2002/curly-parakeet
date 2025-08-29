@@ -105,7 +105,7 @@ async def verify_subscription_cb(client, callback_query):
 async def download_file(url, filepath, status):
     start_time = time.time()
     downloaded = 0
-    chunk_size = 16 * 1024 * 1024  # 16 MB chunks for better speed
+    chunk_size = 16 * 1024 * 1024  # 16 MB chunks
     last_update = 0
 
     async with aiohttp.ClientSession() as session:
@@ -116,7 +116,6 @@ async def download_file(url, filepath, status):
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
-                        # Update progress every 2 seconds
                         if time.time() - last_update > 2 or downloaded == total_size:
                             last_update = time.time()
                             text = await progress_bar(downloaded, total_size, start_time, "📥 Downloading")
@@ -182,6 +181,54 @@ async def url_handler(client, message):
         if os.path.exists(filepath):
             os.remove(filepath)
 
+# ---------------- BROADCAST ----------------
+@app.on_message(filters.command("broadcast") & filters.user(OWNER_IDS))
+async def broadcast_handler(client, message):
+    # Determine broadcast content
+    if message.reply_to_message:
+        b_msg = message.reply_to_message
+    elif len(message.command) > 1:
+        b_msg = message.text.split(maxsplit=1)[1]
+    else:
+        await message.reply_text("⚠️ Usage:\nReply to a message with /broadcast\nOr use: /broadcast Your text")
+        return
+
+    sent, failed = 0, 0
+    users = list(users_col.find({}))
+    total = len(users)
+    status = await message.reply_text(f"📢 Broadcasting started...\n👥 Total Users: {total}")
+
+    for user in users:
+        try:
+            uid = user["user_id"]
+
+            # Media broadcast
+            if hasattr(b_msg, "photo") and b_msg.photo:
+                await app.send_photo(uid, b_msg.photo.file_id, caption=b_msg.caption or "")
+            elif hasattr(b_msg, "video") and b_msg.video:
+                await app.send_video(uid, b_msg.video.file_id, caption=b_msg.caption or "")
+            elif hasattr(b_msg, "document") and b_msg.document:
+                await app.send_document(uid, b_msg.document.file_id, caption=b_msg.caption or "")
+            # Text broadcast
+            elif isinstance(b_msg, str):
+                await app.send_message(uid, b_msg)
+            else:
+                continue
+
+            sent += 1
+            await asyncio.sleep(0.2)  # small delay to avoid FloodWait
+
+        except Exception:
+            failed += 1
+            continue
+
+    await status.edit_text(
+        f"✅ Broadcast completed!\n\n"
+        f"👥 Total Users: {total}\n"
+        f"📩 Sent: {sent}\n"
+        f"⚠️ Failed: {failed}"
+    )
+
 # ---------------- RUN ----------------
-print("Madara URL Uploader Bot started... 🚀 FULL-SIZE STREAMING High-Speed Mode ✅")
+print("Madara URL Uploader Bot started... 🚀 FULL-SIZE STREAMING + BROADCAST Mode ✅")
 app.run()
