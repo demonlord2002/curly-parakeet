@@ -40,10 +40,11 @@ async def progress_bar(current, total, start, stage):
 async def is_subscribed(user_id):
     try:
         channel = Config.SUPPORT_CHANNEL
-        if isinstance(channel, str) and not str(channel).startswith("@"):
-            channel = "@" + str(channel)
+        if str(channel).startswith("@"):
+            channel = channel[1:]  # remove @
         member = await app.get_chat_member(channel, user_id)
-        if member.status in ["member", "administrator", "creator"]:
+        # Accept member, admin, creator, restricted
+        if member.status in ["member", "administrator", "creator", "restricted"]:
             return True
     except UserNotParticipant:
         return False
@@ -54,10 +55,9 @@ async def is_subscribed(user_id):
 
 # -------- FORCE SUBSCRIBE PROMPT ----------
 async def send_force_subscribe_prompt(message):
-    # Use plain username without '@' for t.me link
     channel = Config.SUPPORT_CHANNEL
     if str(channel).startswith("@"):
-        channel = channel[1:]  # remove @ if exists
+        channel = channel[1:]
 
     btn = InlineKeyboardMarkup([
         [
@@ -90,7 +90,7 @@ async def start_cmd(client, message):
         return
 
     btn = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 Support Channel", url=f"https://t.me/{Config.SUPPORT_CHANNEL}")],
+        [InlineKeyboardButton("📢 Support Channel", url=f"https://t.me/{Config.SUPPORT_CHANNEL[1:] if Config.SUPPORT_CHANNEL.startswith('@') else Config.SUPPORT_CHANNEL}")],
         [InlineKeyboardButton("👤 Owner", url=f"https://t.me/{Config.OWNER_USERNAME}")]
     ])
     await message.reply_text(
@@ -107,7 +107,6 @@ async def start_cmd(client, message):
 @app.on_callback_query(filters.regex("verify_sub"))
 async def verify_subscription_cb(client, callback_query):
     user_id = callback_query.from_user.id
-    # wait a bit to ensure Telegram updates new member join
     await asyncio.sleep(2)
     if await is_subscribed(user_id):
         await callback_query.answer("✅ Verified! You can now use the bot.", show_alert=True)
@@ -124,7 +123,7 @@ async def download_file(url, filepath, status):
         async with session.head(url) as resp:
             total_size = int(resp.headers.get("Content-Length", 0))
 
-        chunk_size = 16 * 1024 * 1024  # 16MB per chunk
+        chunk_size = 16 * 1024 * 1024
         tasks = []
         downloaded_data = [None] * ((total_size // chunk_size) + 1)
         start_time = time.time()
@@ -157,7 +156,7 @@ async def download_file(url, filepath, status):
             for chunk in downloaded_data:
                 f.write(chunk)
 
-# -------- URL HANDLER (SUPER FAST) ----------
+# -------- URL HANDLER ----------
 @app.on_message(filters.text & ~filters.command(["start"]))
 async def url_handler(client, message):
     user_id = message.from_user.id
