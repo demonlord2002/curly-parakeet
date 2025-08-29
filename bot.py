@@ -28,6 +28,9 @@ OWNER_IDS = [Config.OWNER_ID]
 user_cooldowns = {}
 COOLDOWN_TIME = 120  # 2 minutes cooldown
 
+# ---------------- ACTIVE TASKS ----------------
+active_tasks = {}  # {user_id: asyncio.Task}
+
 # -------- PROGRESS BAR ----------
 async def progress_bar(current, total, start, stage):
     now = time.time()
@@ -87,7 +90,7 @@ async def start_cmd(client, message):
         ]
     ])
 
-    start_image_url = "https://graph.org/file/28a666c9d556b966df561-c11c02a8abe04be820.jpg"  # Replace with your image URL
+    start_image_url = "https://graph.org/file/28a666c9d556b966df561-c11c02a8abe04be820.jpg"
 
     await message.reply_photo(
         photo=start_image_url,
@@ -109,34 +112,41 @@ async def verify_subscription_cb(client, callback_query):
         await callback_query.answer("❌ Not subscribed yet! Join first ⚡", show_alert=True)
 
 # -------- SAFE STREAMING DOWNLOADER ---------
-async def download_file(url, filepath, status):
+async def download_file(url, filepath, status, user_id):
     start_time = time.time()
     downloaded = 0
-    chunk_size = 16 * 1024 * 1024  # 16 MB
+    chunk_size = 16 * 1024 * 1024
     last_update = 0
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            total_size = int(resp.headers.get("Content-Length", 0))
-            with open(filepath, "wb") as f:
-                async for chunk in resp.content.iter_chunked(chunk_size):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if time.time() - last_update > 2 or downloaded == total_size:
-                            last_update = time.time()
-                            text = await progress_bar(downloaded, total_size, start_time, "📥 Downloading")
-                            try: 
-                                await status.edit_text(text)
-                            except: 
-                                pass
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                total_size = int(resp.headers.get("Content-Length", 0))
+                with open(filepath, "wb") as f:
+                    async for chunk in resp.content.iter_chunked(chunk_size):
+                        if user_id in active_tasks and active_tasks[user_id].cancelled():
+                            raise asyncio.CancelledError
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if time.time() - last_update > 2 or downloaded == total_size:
+                                last_update = time.time()
+                                text = await progress_bar(downloaded, total_size, start_time, "📥 Downloading")
+                                try: 
+                                    await status.edit_text(text)
+                                except: 
+                                    pass
+    except asyncio.CancelledError:
+        await status.edit_text("❌ Download cancelled by user!")
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        raise
 
 # -------- URL HANDLER WITH COOLDOWN ----------
-@app.on_message(filters.text & ~filters.command(["start"]))
+@app.on_message(filters.text & ~filters.command(["start", "cancel"]))
 async def url_handler(client, message):
     user_id = message.from_user.id
 
-    # Owner bypass cooldown
     if user_id not in OWNER_IDS:
         last_time = user_cooldowns.get(user_id, 0)
         if time.time() - last_time < COOLDOWN_TIME:
@@ -157,39 +167,56 @@ async def url_handler(client, message):
     filepath = os.path.join("downloads", filename)
     status = await message.reply_text("📥 Starting download...")
 
-    try:
-        await download_file(url, filepath, status)
-        await status.edit_text("✅ Download completed. Starting upload...")
+    async def task():
+        try:
+            await download_file(url, filepath, status, user_id)
+            await status.edit_text("✅ Download completed. Starting upload...")
 
-        up_start = time.time()
-        last_update = 0
-        async def upload_progress(current, total):
-            nonlocal last_update
-            now = time.time()
-            if now - last_update >= 2 or current == total:
-                last_update = now
-                text = await progress_bar(current, total, up_start, "📤 Uploading")
-                try: await status.edit_text(text)
-                except: pass
+            up_start = time.time()
+            last_update = 0
+            async def upload_progress(current, total):
+                nonlocal last_update
+                now = time.time()
+                if now - last_update >= 2 or current == total:
+                    last_update = now
+                    text = await progress_bar(current, total, up_start, "📤 Uploading")
+                    try: await status.edit_text(text)
+                    except: pass
 
-        await client.send_document(
-            chat_id=message.chat.id,
-            document=filepath,
-            file_name=filename,
-            progress=upload_progress
-        )
-        await status.edit_text("✅ Upload completed! 🔥")
+            await client.send_document(
+                chat_id=message.chat.id,
+                document=filepath,
+                file_name=filename,
+                progress=upload_progress
+            )
+            await status.edit_text("✅ Upload completed! 🔥")
 
-    except Exception as e:
-        await status.edit_text(f"❌ Error: {e}")
-    finally:
-        if os.path.exists(filepath):
-            os.remove(filepath)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            await status.edit_text(f"❌ Error: {e}")
+        finally:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            active_tasks.pop(user_id, None)
+
+    # Save task and run
+    active_tasks[user_id] = asyncio.create_task(task())
+
+# -------- CANCEL COMMAND ----------
+@app.on_message(filters.command("cancel"))
+async def cancel_handler(client, message):
+    user_id = message.from_user.id
+    task = active_tasks.get(user_id)
+    if task:
+        task.cancel()
+        await message.reply_text("❌ Your current download/upload has been cancelled!")
+    else:
+        await message.reply_text("⚠️ No active download/upload to cancel!")
 
 # ---------------- BROADCAST ----------------
 @app.on_message(filters.command("broadcast") & filters.user(OWNER_IDS))
 async def broadcast_handler(client, message):
-    # Determine broadcast content
     if message.reply_to_message:
         b_msg = message.reply_to_message
     elif len(message.command) > 1:
@@ -206,21 +233,19 @@ async def broadcast_handler(client, message):
     for user in users:
         try:
             uid = user["user_id"]
-            # Media broadcast
             if hasattr(b_msg, "photo") and b_msg.photo:
                 await app.send_photo(uid, b_msg.photo.file_id, caption=b_msg.caption or "")
             elif hasattr(b_msg, "video") and b_msg.video:
                 await app.send_video(uid, b_msg.video.file_id, caption=b_msg.caption or "")
             elif hasattr(b_msg, "document") and b_msg.document:
                 await app.send_document(uid, b_msg.document.file_id, caption=b_msg.caption or "")
-            # Text broadcast
             elif isinstance(b_msg, str):
                 await app.send_message(uid, b_msg)
             else:
                 continue
 
             sent += 1
-            await asyncio.sleep(0.2)  # small delay to avoid FloodWait
+            await asyncio.sleep(0.2)
 
         except Exception:
             failed += 1
@@ -234,5 +259,5 @@ async def broadcast_handler(client, message):
     )
 
 # ---------------- RUN ----------------
-print("Rin URL Uploader Bot started... 🚀 FULL-SIZE STREAMING + BROADCAST Mode ✅")
+print("Rin URL Uploader Bot started... 🚀 FULL-SIZE STREAMING + BROADCAST + CANCEL Mode ✅")
 app.run()
