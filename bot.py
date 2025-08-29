@@ -87,7 +87,7 @@ async def start_cmd(client, message):
         ]
     ])
 
-    start_image_url = "YOUR_START_IMAGE_URL_HERE"  # Replace with your image URL
+    start_image_url = "https://graph.org/file/28a666c9d556b966df561-c11c02a8abe04be820.jpg"  # Replace with your image URL
 
     await message.reply_photo(
         photo=start_image_url,
