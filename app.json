@@ -38,8 +38,12 @@
       "value": "SunsetOfMe"
     },
     "SUPPORT_CHANNEL": {
-      "description": "Telegram username of your support/force-subscribe channel",
-      "value": "@Fallen_Angels_Team"
+      "description": "Telegram username of your support/info channel",
+      "value": "Fallen_Angels_Team"
+    },
+    "FORCE_SUB_CHANNEL": {
+      "description": "Telegram username of channel users must join to use the bot",
+      "value": "Fallen_Angels_Team"
     }
   },
   "buildpacks": [
