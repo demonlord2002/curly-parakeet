@@ -1,55 +1,33 @@
 {
-  "name": "file-share-bot",
-  "description": "Telegram bot to save files and generate permanent share links using MongoDB (Heroku supported).",
-  "repository": "https://github.com/yourusername/file-share-bot",
-  "keywords": ["telegram", "bot", "file-share", "mongodb", "pyrogram"],
-  "buildpacks": [
-    { "url": "heroku/python" }
+  "name": "Madara URL Uploader Bot",
+  "description": "⚡ A fast URL uploader bot for Telegram with download/upload progress bar.",
+  "logo": "https://telegra.ph/file/191ebf041e3d2c8d74f36.jpg",
+  "keywords": [
+    "telegram",
+    "url-uploader",
+    "madara",
+    "pyrogram",
+    "file-bot"
   ],
+  "repository": "https://github.com/your-repo/madara-url-uploader",
+  "website": "https://t.me/Fallen_Angels_Team",
   "env": {
     "API_ID": {
-      "description": "Your Telegram API ID from my.telegram.org/apps",
-      "value": "22201946",
-      "required": true
+      "description": "Get this from my.telegram.org/apps",
+      "value": "12345"
     },
     "API_HASH": {
-      "description": "Your Telegram API Hash from my.telegram.org/apps",
-      "value": "f4e7f0de47a09671133ecafa6920ebbe",
-      "required": true
+      "description": "Get this from my.telegram.org/apps",
+      "value": "your_api_hash"
     },
     "BOT_TOKEN": {
-      "description": "Your Telegram Bot Token from @BotFather",
-      "value": "8458120677:AAE-_r9xzg3Tg1PchwlwUmMPcBUUqmOP1MM",
-      "required": true
-    },
-    "BOT_USERNAME": {
-      "description": "Your bot username without @ (used to build share links)",
-      "value": "FastFileLinkerBot",
-      "required": true
-    },
-    "MONGO_URI": {
-      "description": "MongoDB connection URI (Atlas or local)",
-      "value": "mongodb+srv://drdoom2003p:drdoom2003p@cluster0.fnhjrtn.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
-      "required": true
-    },
-    "ADMIN_IDS": {
-      "description": "Comma-separated Telegram user IDs of bot admins",
-      "value": "7590607726",
-      "required": true
-    },
-    "MAX_FILE_SIZE_MB": {
-      "description": "Maximum file size (in MB) allowed for upload",
-      "value": "2048"
+      "description": "Bot token from @BotFather",
+      "value": "your_bot_token"
     }
   },
-  "formation": {
-    "worker": {
-      "quantity": 1,
-      "size": "Basic"
+  "buildpacks": [
+    {
+      "url": "heroku/python"
     }
-  },
-  "addons": [],
-  "scripts": {
-    "postdeploy": "echo '✅ File Share Bot deployed successfully on Heroku!'"
-  }
+  ]
 }
