@@ -219,17 +219,18 @@ async def cancel_handler(client, message):
 # ---------------- BROADCAST FIXED ----------------
 @app.on_message(filters.command("broadcast") & filters.user(Config.OWNER_ID))
 async def broadcast_handler(client, message):
+    # If replying to a message, forward it
     if message.reply_to_message:
         b_msg = message.reply_to_message
         send_type = "forward"
-    elif len(message.command) > 1:
-        b_msg = " ".join(message.command[1:])
-        send_type = "text"
     else:
-        await message.reply_text(
-            "⚠️ Usage:\nReply to a message with /broadcast\nOr use: /broadcast Your text"
-        )
-        return
+        # Get the text after the command exactly as typed
+        text = message.text
+        b_msg = text[len("/broadcast "):].strip()
+        if not b_msg:
+            await message.reply_text("⚠️ Usage: /broadcast Your text here")
+            return
+        send_type = "text"
 
     sent, failed = 0, 0
     users = list(users_col.find({}))
@@ -244,7 +245,7 @@ async def broadcast_handler(client, message):
             else:
                 await app.send_message(uid, b_msg)
             sent += 1
-            await asyncio.sleep(0.2)  # small delay to prevent flood
+            await asyncio.sleep(0.2)
         except Exception:
             failed += 1
             continue
