@@ -6,7 +6,7 @@ import traceback
 import urllib.parse
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.errors import UserNotParticipant, FloodWait, PeerIdInvalid, FloodWait, ChatAdminRequired, BotBlocked, UserNotFound, InputUserDeactivated
+from pyrogram.errors import UserNotParticipant, FloodWait, PeerIdInvalid, ChatAdminRequired, UserNotFound, InputUserDeactivated
 from pymongo import MongoClient
 from config import Config
 
