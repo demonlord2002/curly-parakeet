@@ -2,9 +2,11 @@ import os
 import aiohttp
 import asyncio
 import time
+import traceback
+import urllib.parse
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.errors import UserNotParticipant, FloodWait
+from pyrogram.errors import UserNotParticipant, FloodWait, PeerIdInvalid, FloodWait, ChatAdminRequired, BotBlocked, UserNotFound, InputUserDeactivated
 from pymongo import MongoClient
 from config import Config
 
@@ -86,7 +88,7 @@ async def start_cmd(client, message):
     btn = InlineKeyboardMarkup([
         [
             InlineKeyboardButton("💜 Owner", url=f"https://t.me/{Config.OWNER_USERNAME}"),
-            InlineKeyboardButton("🌸 Support", url=f"https://t.me/{Config.SUPPORT_CHANNEL.replace('@','')}")
+            InlineKeyboardButton("🌸 Support", url=f"https://t.me/{Config.SUPPORT_CHANNEL.replace('@','')}"),
         ]
     ])
 
@@ -106,7 +108,11 @@ async def start_cmd(client, message):
 @app.on_callback_query(filters.regex("verify_sub"))
 async def verify_subscription_cb(client, callback_query):
     if await is_subscribed(callback_query.from_user.id):
-        await callback_query.message.edit_text("✅ Verified! Welcome to Rin Family ❤️")
+        try:
+            await callback_query.message.edit_text("✅ Verified! Welcome to Rin Family ❤️")
+        except Exception:
+            pass
+        # call start_cmd to show welcome (pass a fake message object by reusing callback message)
         await start_cmd(client, callback_query.message)
     else:
         await callback_query.answer("❌ Not subscribed yet! Join first ⚡", show_alert=True)
@@ -132,14 +138,18 @@ async def download_file(url, filepath, status, user_id):
                             if time.time() - last_update > 2 or downloaded == total_size:
                                 last_update = time.time()
                                 text = await progress_bar(downloaded, total_size, start_time, "📥 Downloading")
-                                try: 
+                                try:
                                     await status.edit_text(text)
-                                except: 
+                                except:
                                     pass
     except asyncio.CancelledError:
-        await status.edit_text("❌ Download cancelled by user!")
+        try:
+            await status.edit_text("❌ Download cancelled by user!")
+        except: pass
         if os.path.exists(filepath):
             os.remove(filepath)
+        raise
+    except Exception as e:
         raise
 
 # -------- URL HANDLER WITH COOLDOWN ----------
@@ -175,6 +185,7 @@ async def url_handler(client, message):
 
             up_start = time.time()
             last_update = 0
+
             async def upload_progress(current, total):
                 nonlocal last_update
                 now = time.time()
@@ -199,7 +210,9 @@ async def url_handler(client, message):
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            await status.edit_text(f"❌ Error: {e}")
+            try:
+                await status.edit_text(f"❌ Error: {e}")
+            except: pass
         finally:
             if os.path.exists(filepath):
                 os.remove(filepath)
@@ -222,24 +235,44 @@ async def cancel_handler(client, message):
 # ---------------- BROADCAST ----------------
 @app.on_message(filters.command("broadcast") & filters.user(Config.OWNER_ID))
 async def broadcast_handler(client, message):
+    # Determine broadcast payload
+    b_msg = None
+
+    # Case 1: owner replied to a message -> forward that
     if message.reply_to_message:
         b_msg = message.reply_to_message
-    elif len(message.command) > 1:
-        b_msg = message.text.split(maxsplit=1)[1]
     else:
+        # Case 2: /broadcast some text
+        # Robustly extract text after the command and decode any url-encoding
+        try:
+            raw = message.text or ""
+            # Remove command portion (/broadcast or /broadcast@BotName)
+            parts = raw.split(maxsplit=1)
+            if len(parts) > 1:
+                text = parts[1]
+                text = urllib.parse.unquote_plus(text)
+                text = text.strip()
+                if text:
+                    b_msg = text
+        except Exception:
+            b_msg = None
+
+    if not b_msg:
         await message.reply_text(
-            "⚠️ Usage:\nReply to a message with /broadcast\nOr use: /broadcast Your text"
+            "⚠️ Usage:\nReply to a message with /broadcast (to broadcast media)\nOr use: /broadcast Your text here"
         )
         return
 
     sent, failed = 0, 0
-    users = list(users_col.find({}))
+    users = list(users_col.find({}, {"user_id": 1}))
     total = len(users)
     status = await message.reply_text(f"📢 Broadcasting started...\n👥 Total Users: {total}")
 
-    for user in users:
+    for u in users:
+        uid = u.get("user_id")
+        if not uid:
+            continue
         try:
-            uid = user["user_id"]
             if hasattr(b_msg, "photo") and b_msg.photo:
                 await app.send_photo(uid, b_msg.photo.file_id, caption=b_msg.caption or "")
             elif hasattr(b_msg, "video") and b_msg.video:
@@ -247,23 +280,47 @@ async def broadcast_handler(client, message):
             elif hasattr(b_msg, "document") and b_msg.document:
                 await app.send_document(uid, b_msg.document.file_id, caption=b_msg.caption or "")
             elif isinstance(b_msg, str):
+                # plain text broadcast
                 await app.send_message(uid, b_msg)
             else:
-                continue
+                # fallback: forward the message
+                try:
+                    await app.forward_messages(uid, message.chat.id, message.message_id)
+                except Exception:
+                    # if forwarding fails, just skip
+                    raise
 
             sent += 1
-            await asyncio.sleep(0.2)
+            # small sleep to avoid hitting limits
+            await asyncio.sleep(0.12)
 
-        except Exception:
+        except (BotBlocked, UserNotFound, InputUserDeactivated, PeerIdInvalid):
+            failed += 1
+            continue
+        except FloodWait as fw:
+            # sleep and retry this user
+            await asyncio.sleep(fw.x)
+            try:
+                # retry once
+                if isinstance(b_msg, str):
+                    await app.send_message(uid, b_msg)
+                else:
+                    await app.forward_messages(uid, message.chat.id, message.message_id)
+                sent += 1
+            except Exception:
+                failed += 1
+            continue
+        except Exception as e:
+            # unexpected error, count as failed and continue
             failed += 1
             continue
 
-    await status.edit_text(
-        f"✅ Broadcast completed!\n\n"
-        f"👥 Total Users: {total}\n"
-        f"📩 Sent: {sent}\n"
-        f"⚠️ Failed: {failed}"
-    )
+    try:
+        await status.edit_text(
+            f"✅ Broadcast completed!\n\n👥 Total Users: {total}\n📩 Sent: {sent}\n⚠️ Failed: {failed}"
+        )
+    except:
+        pass
 
 
 # ---------------- RUN ----------------
