@@ -25,7 +25,7 @@ users_col = db["users"]
 OWNER_IDS = [Config.OWNER_ID]
 
 # ---------------- COOLDOWN ----------------
-user_cooldowns = {}
+user_cooldowns = {}  # {user_id: last_task_completed_time}
 COOLDOWN_TIME = 120  # 2 minutes cooldown
 
 # ---------------- ACTIVE TASKS ----------------
@@ -147,16 +147,17 @@ async def download_file(url, filepath, status, user_id):
 async def url_handler(client, message):
     user_id = message.from_user.id
 
-    if user_id not in OWNER_IDS:
-        last_time = user_cooldowns.get(user_id, 0)
-        if time.time() - last_time < COOLDOWN_TIME:
-            await message.reply_text(f"⏳ Please wait {int(COOLDOWN_TIME - (time.time() - last_time))}s before next upload!")
-            return
-        user_cooldowns[user_id] = time.time()
-
     if not await is_subscribed(user_id):
         await send_force_subscribe_prompt(message)
         return
+
+    # ---- COOLDOWN CHECK ----
+    if user_id not in OWNER_IDS:
+        last_done = user_cooldowns.get(user_id, 0)
+        if time.time() - last_done < COOLDOWN_TIME:
+            wait_time = int(COOLDOWN_TIME - (time.time() - last_done))
+            await message.reply_text(f"⏳ Please wait {wait_time}s before starting your next upload!")
+            return
 
     url = message.text.strip()
     filename = url.split("/")[-1].split("?")[0]
@@ -190,6 +191,10 @@ async def url_handler(client, message):
                 progress=upload_progress
             )
             await status.edit_text("✅ Upload completed! 🔥")
+
+            # ✅ UPDATE COOLDOWN AFTER TASK COMPLETION
+            if user_id not in OWNER_IDS:
+                user_cooldowns[user_id] = time.time()
 
         except asyncio.CancelledError:
             pass
