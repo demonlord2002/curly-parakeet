@@ -151,7 +151,6 @@ async def url_handler(client, message):
         await send_force_subscribe_prompt(message)
         return
 
-    # ---- COOLDOWN CHECK ----
     if user_id not in OWNER_IDS:
         last_done = user_cooldowns.get(user_id, 0)
         if time.time() - last_done < COOLDOWN_TIME:
@@ -192,7 +191,6 @@ async def url_handler(client, message):
             )
             await status.edit_text("✅ Upload completed! 🔥")
 
-            # ✅ UPDATE COOLDOWN AFTER TASK COMPLETION
             if user_id not in OWNER_IDS:
                 user_cooldowns[user_id] = time.time()
 
@@ -205,7 +203,6 @@ async def url_handler(client, message):
                 os.remove(filepath)
             active_tasks.pop(user_id, None)
 
-    # Save task and run
     active_tasks[user_id] = asyncio.create_task(task())
 
 # -------- CANCEL COMMAND ----------
@@ -219,13 +216,15 @@ async def cancel_handler(client, message):
     else:
         await message.reply_text("⚠️ No active download/upload to cancel!")
 
-# ---------------- BROADCAST ----------------
+# ---------------- BROADCAST FIXED ----------------
 @app.on_message(filters.command("broadcast") & filters.user(Config.OWNER_ID))
 async def broadcast_handler(client, message):
     if message.reply_to_message:
         b_msg = message.reply_to_message
+        send_type = "forward"
     elif len(message.command) > 1:
-        b_msg = message.text.split(maxsplit=1)[1]
+        b_msg = " ".join(message.command[1:])
+        send_type = "text"
     else:
         await message.reply_text(
             "⚠️ Usage:\nReply to a message with /broadcast\nOr use: /broadcast Your text"
@@ -238,22 +237,14 @@ async def broadcast_handler(client, message):
     status = await message.reply_text(f"📢 Broadcasting started...\n👥 Total Users: {total}")
 
     for user in users:
+        uid = user["user_id"]
         try:
-            uid = user["user_id"]
-            if hasattr(b_msg, "photo") and b_msg.photo:
-                await app.send_photo(uid, b_msg.photo.file_id, caption=b_msg.caption or "")
-            elif hasattr(b_msg, "video") and b_msg.video:
-                await app.send_video(uid, b_msg.video.file_id, caption=b_msg.caption or "")
-            elif hasattr(b_msg, "document") and b_msg.document:
-                await app.send_document(uid, b_msg.document.file_id, caption=b_msg.caption or "")
-            elif isinstance(b_msg, str):
-                await app.send_message(uid, b_msg)
+            if send_type == "forward":
+                await b_msg.copy(uid)
             else:
-                continue
-
+                await app.send_message(uid, b_msg)
             sent += 1
-            await asyncio.sleep(0.2)
-
+            await asyncio.sleep(0.2)  # small delay to prevent flood
         except Exception:
             failed += 1
             continue
@@ -264,7 +255,6 @@ async def broadcast_handler(client, message):
         f"📩 Sent: {sent}\n"
         f"⚠️ Failed: {failed}"
     )
-
 
 # ---------------- RUN ----------------
 print("Rin URL Uploader Bot started... 🚀 FULL-SIZE STREAMING + BROADCAST + CANCEL Mode ✅")
