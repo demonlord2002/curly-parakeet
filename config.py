@@ -14,10 +14,10 @@ class Config:
     OWNER_USERNAME = os.getenv("OWNER_USERNAME", "SunsetOfMe")  # Optional for buttons
 
     # Support Channel (for help / info only)
-    SUPPORT_CHANNEL = os.getenv("SUPPORT_CHANNEL", "The_Architect_II")
+    SUPPORT_CHANNEL = os.getenv("SUPPORT_CHANNEL", "InfinityCastleTamil")
 
     # Force Subscribe Channel (must join before using bot)
-    FORCE_SUB_CHANNEL = os.getenv("FORCE_SUB_CHANNEL", "The_Architect_II")
+    FORCE_SUB_CHANNEL = os.getenv("FORCE_SUB_CHANNEL", "InfinityCastleTamil")
 
     # Allowed file extensions
     ALLOWED_EXTENSIONS = [".mp4", ".mkv"]
