@@ -39,11 +39,11 @@
     },
     "SUPPORT_CHANNEL": {
       "description": "Telegram username of your support/info channel",
-      "value": "The_Architect_II"
+      "value": "InfinityCastleTamil"
     },
     "FORCE_SUB_CHANNEL": {
       "description": "Telegram username of channel users must join to use the bot",
-      "value": "The_Architect_II"
+      "value": "InfinityCastleTamil"
     }
   },
   "buildpacks": [
