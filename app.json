@@ -23,7 +23,7 @@
     },
     "BOT_TOKEN": {
       "description": "Bot token from @BotFather",
-      "value": "8275918271:AAG9tIjh-5mWRvrz2lKMhMQH8NHdBz4_IgE"
+      "value": "8592014965:AAHDjdyVenCKfkwKLwLVwvtIJ5A5bJbOhnA"
     },
     "MONGO_URI": {
       "description": "MongoDB URI (Atlas or local)",
@@ -31,19 +31,19 @@
     },
     "OWNER_ID": {
       "description": "Your Telegram ID (owner/admin)",
-      "value": "7590607726"
+      "value": "8548801170"
     },
     "OWNER_USERNAME": {
       "description": "Your Telegram username (without @, optional for buttons)",
-      "value": "SunsetOfMe"
+      "value": "Shadow_Lordd"
     },
     "SUPPORT_CHANNEL": {
       "description": "Telegram username of your support/info channel",
-      "value": "InfinityCastleTamil"
+      "value": "How_To_Downloadee"
     },
     "FORCE_SUB_CHANNEL": {
       "description": "Telegram username of channel users must join to use the bot",
-      "value": "InfinityCastleTamil"
+      "value": "How_To_Downloadee"
     }
   },
   "buildpacks": [
