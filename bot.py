@@ -21,15 +21,10 @@ mongo = MongoClient(Config.MONGO_URI)
 db = mongo["rin_bot"]
 users_col = db["users"]
 
-# ---------------- OWNER ----------------
 OWNER_IDS = [Config.OWNER_ID]
-
-# ---------------- COOLDOWN ----------------
-user_cooldowns = {}  # {user_id: last_task_completed_time}
-COOLDOWN_TIME = 120  # 2 minutes cooldown
-
-# ---------------- ACTIVE TASKS ----------------
-active_tasks = {}  # {user_id: asyncio.Task}
+user_cooldowns = {}
+COOLDOWN_TIME = 120
+active_tasks = {}
 
 # -------- PROGRESS BAR ----------
 async def progress_bar(current, total, start, stage):
@@ -43,21 +38,14 @@ async def progress_bar(current, total, start, stage):
     eta = (total - current) / speed if speed else 0
     return f"{stage}: {bar} {percent:.2f}% | {speed/1024/1024:.2f} MB/s | ETA: {int(eta)}s"
 
-# -------- FORCE SUBSCRIBE CHECK ----------
+# -------- FORCE SUBSCRIBE ----------
 async def is_subscribed(user_id: int) -> bool:
     try:
         member = await app.get_chat_member(Config.FORCE_SUB_CHANNEL, user_id)
         return member.status not in ["left", "kicked"]
-    except UserNotParticipant:
-        return False
-    except FloodWait as e:
-        await asyncio.sleep(e.value)
-        return await is_subscribed(user_id)
-    except Exception as e:
-        print(f"[is_subscribed] Error: {e}")
+    except:
         return False
 
-# -------- FORCE SUBSCRIBE PROMPT ----------
 async def send_force_subscribe_prompt(message):
     btn = InlineKeyboardMarkup([
         [
@@ -66,17 +54,17 @@ async def send_force_subscribe_prompt(message):
         ]
     ])
     await message.reply_text(
-        "⚡ **Join our Support Channel to unlock access!** ⚡\n🔒 Access locked until you join ❤️🥷",
+        "⚡ **Join our Support Channel to unlock access!**",
         reply_markup=btn
     )
 
-# -------- START CMD ----------
+# -------- START ----------
 @app.on_message(filters.command("start"))
 async def start_cmd(client, message):
     user_id = message.from_user.id
     users_col.update_one(
         {"user_id": user_id},
-        {"$set": {"first_name": message.from_user.first_name, "username": message.from_user.username, "joined_at": time.time()}},
+        {"$set": {"first_name": message.from_user.first_name}},
         upsert=True
     )
     if not await is_subscribed(user_id):
@@ -90,59 +78,68 @@ async def start_cmd(client, message):
         ]
     ])
 
-    start_image_url = "https://graph.org/file/28a666c9d556b966df561-c11c02a8abe04be820.jpg"
-
     await message.reply_photo(
-        photo=start_image_url,
-        caption=(
-            f"💜 **Rin's Ninja Uploader** 💜\n\n"
-            f"👋 Hello **{message.from_user.first_name}**! Send a **Direct Video URL** and Rin will handle it swiftly! ⚡\n\n"
-            f"💫 **Full-size uploads safely delivered!** 💫"
-        ),
+        photo="https://graph.org/file/28a666c9d556b966df561-c11c02a8abe04be820.jpg",
+        caption="💜 **Rin's Ninja Uploader** 💜\n\nSend a **Direct Video URL** 💫",
         reply_markup=btn
     )
 
-# -------- VERIFY CALLBACK ----------
+# -------- VERIFY ----------
 @app.on_callback_query(filters.regex("verify_sub"))
 async def verify_subscription_cb(client, callback_query):
     if await is_subscribed(callback_query.from_user.id):
-        await callback_query.message.edit_text("✅ Verified! Welcome to Rin Family ❤️")
+        await callback_query.message.edit_text("✅ Verified!")
         await start_cmd(client, callback_query.message)
     else:
-        await callback_query.answer("❌ Not subscribed yet! Join first ⚡", show_alert=True)
+        await callback_query.answer("❌ Not subscribed!", show_alert=True)
 
-# -------- SAFE STREAMING DOWNLOADER ---------
+# -------- TRUE DIRECT DOWNLOADER (XHAMSTER FIX) ---------
 async def download_file(url, filepath, status, user_id):
     start_time = time.time()
     downloaded = 0
-    chunk_size = 16 * 1024 * 1024
+    chunk_size = 10 * 1024 * 1024
     last_update = 0
 
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; Mobile) Chrome/120 Safari/537.36",
+        "Referer": url,
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
+        async with aiohttp.ClientSession(headers=HEADERS) as session:
+            async with session.get(url, allow_redirects=True, ssl=False) as resp:
+
+                if resp.status >= 400:
+                    raise Exception(f"HTTP Error {resp.status}")
+
                 total_size = int(resp.headers.get("Content-Length", 0))
+
                 with open(filepath, "wb") as f:
                     async for chunk in resp.content.iter_chunked(chunk_size):
                         if user_id in active_tasks and active_tasks[user_id].cancelled():
                             raise asyncio.CancelledError
+
                         if chunk:
                             f.write(chunk)
                             downloaded += len(chunk)
-                            if time.time() - last_update > 2 or downloaded == total_size:
+
+                            if time.time() - last_update > 2:
                                 last_update = time.time()
                                 text = await progress_bar(downloaded, total_size, start_time, "📥 Downloading")
-                                try: 
+                                try:
                                     await status.edit_text(text)
-                                except: 
+                                except:
                                     pass
+
     except asyncio.CancelledError:
-        await status.edit_text("❌ Download cancelled by user!")
+        await status.edit_text("❌ Download cancelled!")
         if os.path.exists(filepath):
             os.remove(filepath)
         raise
 
-# -------- URL HANDLER WITH COOLDOWN ----------
+# -------- URL HANDLER ----------
 @app.on_message(filters.text & ~filters.command(["start", "cancel"]))
 async def url_handler(client, message):
     user_id = message.from_user.id
@@ -151,121 +148,65 @@ async def url_handler(client, message):
         await send_force_subscribe_prompt(message)
         return
 
-    # ---- COOLDOWN CHECK ----
-    if user_id not in OWNER_IDS:
-        last_done = user_cooldowns.get(user_id, 0)
-        if time.time() - last_done < COOLDOWN_TIME:
-            wait_time = int(COOLDOWN_TIME - (time.time() - last_done))
-            await message.reply_text(f"⏳ Please wait {wait_time}s before starting your next upload!")
-            return
-
     url = message.text.strip()
+
+    # Fix filename extraction
     filename = url.split("/")[-1].split("?")[0]
-    if not any(filename.endswith(ext) for ext in Config.ALLOWED_EXTENSIONS):
-        filename += ".mkv"
+    if "." not in filename:
+        filename += ".mp4"
 
     os.makedirs("downloads", exist_ok=True)
-    filepath = os.path.join("downloads", filename)
+    filepath = f"downloads/{filename}"
+
     status = await message.reply_text("📥 Starting download...")
 
     async def task():
         try:
             await download_file(url, filepath, status, user_id)
-            await status.edit_text("✅ Download completed. Starting upload...")
+
+            await status.edit_text("✅ Download done. Uploading...")
 
             up_start = time.time()
             last_update = 0
-            async def upload_progress(current, total):
+
+            async def upload_progress(c, t):
                 nonlocal last_update
                 now = time.time()
-                if now - last_update >= 2 or current == total:
+                if now - last_update >= 2:
                     last_update = now
-                    text = await progress_bar(current, total, up_start, "📤 Uploading")
-                    try: await status.edit_text(text)
+                    txt = await progress_bar(c, t, up_start, "📤 Uploading")
+                    try: await status.edit_text(txt)
                     except: pass
 
             await client.send_document(
-                chat_id=message.chat.id,
-                document=filepath,
+                message.chat.id,
+                filepath,
                 file_name=filename,
                 progress=upload_progress
             )
-            await status.edit_text("✅ Upload completed! 🔥")
 
-            # ✅ UPDATE COOLDOWN AFTER TASK COMPLETION
-            if user_id not in OWNER_IDS:
-                user_cooldowns[user_id] = time.time()
+            await status.edit_text("✅ Upload completed!")
 
-        except asyncio.CancelledError:
-            pass
         except Exception as e:
             await status.edit_text(f"❌ Error: {e}")
+
         finally:
             if os.path.exists(filepath):
                 os.remove(filepath)
             active_tasks.pop(user_id, None)
 
-    # Save task and run
     active_tasks[user_id] = asyncio.create_task(task())
 
-# -------- CANCEL COMMAND ----------
+# -------- CANCEL ----------
 @app.on_message(filters.command("cancel"))
 async def cancel_handler(client, message):
-    user_id = message.from_user.id
-    task = active_tasks.get(user_id)
+    task = active_tasks.get(message.from_user.id)
     if task:
         task.cancel()
-        await message.reply_text("❌ Your current download/upload has been cancelled!")
+        await message.reply_text("❌ Download/Upload cancelled!")
     else:
-        await message.reply_text("⚠️ No active download/upload to cancel!")
+        await message.reply_text("⚠️ No active task!")
 
-# ---------------- BROADCAST ----------------
-@app.on_message(filters.command("broadcast") & filters.user(Config.OWNER_ID))
-async def broadcast_handler(client, message):
-    if message.reply_to_message:
-        b_msg = message.reply_to_message
-    elif len(message.command) > 1:
-        b_msg = message.text.split(maxsplit=1)[1]
-    else:
-        await message.reply_text(
-            "⚠️ Usage:\nReply to a message with /broadcast\nOr use: /broadcast Your text"
-        )
-        return
-
-    sent, failed = 0, 0
-    users = list(users_col.find({}))
-    total = len(users)
-    status = await message.reply_text(f"📢 Broadcasting started...\n👥 Total Users: {total}")
-
-    for user in users:
-        try:
-            uid = user["user_id"]
-            if hasattr(b_msg, "photo") and b_msg.photo:
-                await app.send_photo(uid, b_msg.photo.file_id, caption=b_msg.caption or "")
-            elif hasattr(b_msg, "video") and b_msg.video:
-                await app.send_video(uid, b_msg.video.file_id, caption=b_msg.caption or "")
-            elif hasattr(b_msg, "document") and b_msg.document:
-                await app.send_document(uid, b_msg.document.file_id, caption=b_msg.caption or "")
-            elif isinstance(b_msg, str):
-                await app.send_message(uid, b_msg)
-            else:
-                continue
-
-            sent += 1
-            await asyncio.sleep(0.2)
-
-        except Exception:
-            failed += 1
-            continue
-
-    await status.edit_text(
-        f"✅ Broadcast completed!\n\n"
-        f"👥 Total Users: {total}\n"
-        f"📩 Sent: {sent}\n"
-        f"⚠️ Failed: {failed}"
-    )
-
-
-# ---------------- RUN ----------------
-print("Rin URL Uploader Bot started... 🚀 FULL-SIZE STREAMING + BROADCAST + CANCEL Mode ✅")
+# -------- RUN ----------
+print("Rin URL Uploader Bot started... 🚀 XHAMSTER FIX ADDED ✅")
 app.run()
