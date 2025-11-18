@@ -40,24 +40,41 @@ async def progress_bar(current, total, start, stage):
 async def extract_xhamster(url):
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "*/*",
+            "User-Agent": "Mozilla/5.0 (Android 10)",
+            "Accept": "*/*"
         }
         async with aiohttp.ClientSession(headers=headers) as s:
             async with s.get(url) as r:
                 html = await r.text()
 
-        data = re.findall(r'"sources":(\[.*?\])', html)
-        if not data:
-            return None
+        # Try direct mp4 URL pattern
+        match = re.search(r'"videoUrl":"(https.*?\.mp4.*?)"', html)
+        if match:
+            return match.group(1).replace("\\/", "/")
 
-        sources = json.loads(data[0])
-        best = sorted(sources, key=lambda x: x.get("quality", 0), reverse=True)[0]
-        return best["url"]
+        # Try highest quality pattern
+        match2 = re.findall(r'"format":"(\d+.*?)","videoUrl":"(https.*?\.mp4.*?)"', html)
+        if match2:
+            # Sort by format (e.g., 720p, 480p)
+            best = sorted(match2, key=lambda x: int(x[0].replace("p","").replace("P","")), reverse=True)[0]
+            return best[1].replace("\\/", "/")
+
+        # New XHamster CDN key extraction
+        match3 = re.search(r'"720p":"(https.*?\.mp4.*?)"', html)
+        if match3:
+            return match3.group(1).replace("\\/", "/")
+
+        # Fallback generic mp4
+        match4 = re.search(r'(https.*?\.mp4.*?)"', html)
+        if match4:
+            return match4.group(1).replace("\\/", "/")
+
+        return None
 
     except Exception as e:
-        print("[extract_xhamster ERROR]", e)
+        print("EXTRACTOR ERROR:", e)
         return None
+
 
 # --------------------------------------------------------------
 #               M3U8 → MP4 DOWNLOADER
